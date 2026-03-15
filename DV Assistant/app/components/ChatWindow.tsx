@@ -39,7 +39,14 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
 
     const userMsg: ChatMessage = { id: crypto.randomUUID(), role: 'user', content: query, timestamp: new Date() };
     const assistantId = crypto.randomUUID();
-    const assistantMsg: ChatMessage = { id: assistantId, role: 'assistant', content: '', timestamp: new Date(), isStreaming: true };
+    const assistantMsg: ChatMessage = { 
+      id: assistantId, 
+      role: 'assistant', 
+      content: '', 
+      timestamp: new Date(), 
+      isStreaming: true,
+      query: query // Store the query for feedback
+    };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setLoading(true);
@@ -284,7 +291,7 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
                   </div>
                   {msg.sources && msg.sources.length > 0 && <SourceList sources={msg.sources} />}
                   {!msg.isStreaming && msg.content && (
-                    <MessageActions messageId={msg.id} content={msg.content} />
+                    <MessageActions messageId={msg.id} content={msg.content} query={msg.query || ''} />
                   )}
                 </div>
               )}
@@ -304,7 +311,7 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
-              placeholder="Ask anything about Data Vault..."
+              placeholder="Ask about your documents..."
               disabled={loading}
               rows={1}
               className="flex-1 bg-transparent text-sm text-dv-text placeholder-dv-muted resize-none focus:outline-none max-h-32 min-h-[1.5rem]"
@@ -325,7 +332,7 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
   );
 }
 
-function MessageActions({ messageId, content }: { messageId: string; content: string }) {
+function MessageActions({ messageId, content, query }: { messageId: string; content: string; query: string }) {
   const [feedback, setFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -336,7 +343,12 @@ function MessageActions({ messageId, content }: { messageId: string; content: st
       await fetch('/api/feedback', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message_id: messageId, helpful }),
+        body: JSON.stringify({ 
+          message_id: messageId, 
+          query: query,
+          response: content,
+          helpful 
+        }),
       });
     } catch {}
   };

@@ -15,6 +15,9 @@ begin
 end;
 $$ language plpgsql;
 
+-- Drop existing trigger if it exists to allow re-running migrations
+drop trigger if exists chunks_content_tsvector_trigger on chunks;
+
 create trigger chunks_content_tsvector_trigger
   before insert or update on chunks
   for each row

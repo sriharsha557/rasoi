@@ -2,6 +2,8 @@
 // Supports both local (@xenova/transformers) and HuggingFace API
 // Use local for consistency, HF API as fallback
 
+import { EmbeddingError } from './errors';
+
 const HF_API_URL = 'https://router.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2';
 const BATCH_SIZE = 10;
 const MAX_RETRIES = 3;
@@ -42,19 +44,19 @@ async function makeHFRequest(inputs: string | string[]): Promise<number[] | numb
 
       if (!res.ok) {
         const text = await res.text();
-        throw new Error(`HF API error ${res.status}: ${text}`);
+        throw new EmbeddingError(`HF API error ${res.status}: ${text}`);
       }
 
       return await res.json();
     } catch (err: any) {
       clearTimeout(timeout);
-      if (err.name === 'AbortError') throw new Error('HF API request timed out after 30s');
+      if (err.name === 'AbortError') throw new EmbeddingError('HF API request timed out after 30s');
       if (attempt === MAX_RETRIES) throw err;
       await sleep(attempt * 2000);
     }
   }
 
-  throw new Error('HF API failed after all retries');
+  throw new EmbeddingError('HF API failed after all retries');
 }
 
 async function getEmbeddingHF(text: string): Promise<number[]> {
@@ -131,27 +133,25 @@ async function getEmbeddingsBatchLocal(texts: string[]): Promise<number[][]> {
 // ── Public API ────────────────────────────────────────────────────────────────
 /**
  * Generate embedding for a single text
- * Uses local model if available, otherwise HuggingFace API
+ * Uses HuggingFace API by default, local model only if explicitly configured
  */
 export async function getEmbedding(text: string): Promise<number[]> {
-  if (USE_LOCAL_EMBEDDINGS || typeof window === 'undefined') {
-    // Server-side: prefer local embeddings
+  // Always use HF API unless explicitly configured for local
+  if (USE_LOCAL_EMBEDDINGS) {
     return getEmbeddingLocal(text);
   }
-  // Client-side or explicit HF API usage
   return getEmbeddingHF(text);
 }
 
 /**
  * Generate embeddings for multiple texts in batches
- * Uses local model if available, otherwise HuggingFace API
+ * Uses HuggingFace API by default, local model only if explicitly configured
  */
 export async function getEmbeddingsBatch(texts: string[]): Promise<number[][]> {
-  if (USE_LOCAL_EMBEDDINGS || typeof window === 'undefined') {
-    // Server-side: prefer local embeddings
+  // Always use HF API unless explicitly configured for local
+  if (USE_LOCAL_EMBEDDINGS) {
     return getEmbeddingsBatchLocal(texts);
   }
-  // Client-side or explicit HF API usage
   return getEmbeddingsBatchHF(texts);
 }
 

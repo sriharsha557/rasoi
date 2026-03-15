@@ -46,6 +46,7 @@ export interface ChatMessage {
   timestamp: Date;
   sources?: Source[];
   isStreaming?: boolean;
+  query?: string; // Store the original query for feedback
 }
 
 // API Request/Response types

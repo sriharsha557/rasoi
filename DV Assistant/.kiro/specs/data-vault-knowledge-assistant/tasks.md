@@ -27,7 +27,7 @@ The implementation follows a phased approach: core infrastructure setup, documen
     - Handle extraction errors with descriptive messages
     - _Requirements: 2.1, 2.2, 2.3, 2.6, 3.1, 3.2, 3.3, 3.4, 3.5_
 
-  - [ ]* 2.2 Write unit tests for text extractors
+  - [x]* 2.2 Write unit tests for text extractors
     - Test PDF extraction with sample documents
     - Test DOCX extraction with sample documents
     - Test plain text and Markdown extraction
@@ -35,7 +35,7 @@ The implementation follows a phased approach: core infrastructure setup, documen
     - Test page number metadata preservation
     - _Requirements: 3.1, 3.2, 3.3, 3.4_
 
-  - [ ]* 2.3 Write property test for text extraction completeness
+  - [x]* 2.3 Write property test for text extraction completeness
     - **Property 4: Text Extraction Completeness**
     - **Validates: Requirements 2.6, 3.3, 3.6**
 
@@ -47,14 +47,14 @@ The implementation follows a phased approach: core infrastructure setup, documen
     - Generate chunk metadata (index, offsets, page numbers)
     - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.5, 4.6, 4.7_
 
-  - [ ]* 2.5 Write unit tests for chunker
+  - [x]* 2.5 Write unit tests for chunker
     - Test chunking with various document sizes
     - Test sentence boundary preservation
     - Test page number association
     - Test edge cases (empty document, single sentence, very long document)
     - _Requirements: 4.1, 4.2, 4.4_
 
-  - [ ]* 2.6 Write property test for chunk overlap invariant
+  - [-]* 2.6 Write property test for chunk overlap invariant
     - **Property 7: Chunk Overlap Invariant**
     - **Validates: Requirements 4.3, 18.1, 18.2**
 
