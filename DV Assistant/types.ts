@@ -47,6 +47,8 @@ export interface ChatMessage {
   sources?: Source[];
   isStreaming?: boolean;
   query?: string; // Store the original query for feedback
+  hasError?: boolean;
+  originalQuery?: string;
 }
 
 // API Request/Response types
@@ -55,6 +57,7 @@ export interface QueryRequest {
   doc_type_filter?: string | null;
   top_k?: number;
   chat_history?: Array<{ role: string; content: string }>;
+  similarity_threshold?: number;
 }
 
 export interface IngestResponse {
@@ -68,4 +71,80 @@ export interface ErrorResponse {
   error: string;
   code?: string;
   details?: string;
+}
+
+// Export types
+export interface ExportOptions {
+  format: 'markdown' | 'pdf';
+  includeTimestamps: boolean;
+  includeSources: boolean;
+  includeMetadata: boolean;
+}
+
+export interface ExportRequest {
+  messages: ChatMessage[];
+  options: ExportOptions;
+}
+
+export interface ExportResponse {
+  success: boolean;
+  downloadUrl?: string;
+  filename?: string;
+  error?: string;
+}
+
+// Reindex types
+export interface ReindexRequest {
+  documentId: string;
+  options?: {
+    chunkSize?: number;
+    overlap?: number;
+    forceReEmbed?: boolean;
+  };
+}
+
+export interface ReindexResponse {
+  success: boolean;
+  documentId: string;
+  oldChunkCount: number;
+  newChunkCount: number;
+  message: string;
+}
+
+export interface ReindexProgress {
+  stage: 'fetching' | 'chunking' | 'embedding' | 'storing' | 'complete';
+  progress: number;
+  message: string;
+}
+
+// Query history
+export interface QueryHistoryEntry {
+  query: string;
+  timestamp: number;
+  resultCount?: number;
+}
+
+// Similarity threshold config
+export interface SimilarityThresholdConfig {
+  threshold: number;
+  enabled: boolean;
+}
+
+// Streaming state
+export interface StreamingState {
+  messageId: string;
+  partialContent: string;
+  sources: Source[];
+  isRecoverable: boolean;
+  error?: string;
+}
+
+// Responsive layout types
+export type Breakpoint = 'mobile' | 'tablet' | 'desktop';
+
+export interface ResponsiveConfig {
+  breakpoint: Breakpoint;
+  isMobile: boolean;
+  isTablet: boolean;
+  isDesktop: boolean;
 }

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
       
       try {
         const body: QueryRequest = await req.json();
-        const { query, doc_type_filter, top_k = 12, chat_history = [] } = body; // Increased from 5 to 12
+        const { query, doc_type_filter, top_k = 12, chat_history = [], similarity_threshold } = body;
 
         if (!query || query.length > 500) {
           controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'Invalid query' })}\n\n`));
@@ -45,10 +45,22 @@ export async function POST(req: NextRequest) {
         }
 
         const matchedChunks = chunks as MatchedChunk[];
-        retrievedChunkIds = matchedChunks.map((c) => c.id);
+
+        // Apply similarity threshold filter if provided
+        let filteredChunks = matchedChunks;
+        if (typeof similarity_threshold === 'number') {
+          filteredChunks = matchedChunks.filter((c) => c.similarity >= similarity_threshold);
+          if (filteredChunks.length === 0) {
+            controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'No documents meet the similarity threshold. Try lowering the threshold or rephrasing your query.' })}\n\n`));
+            controller.close();
+            return;
+          }
+        }
+
+        retrievedChunkIds = filteredChunks.map((c) => c.id);
 
         // Apply simple re-ranking: boost chunks with higher similarity and preferred doc types
-        const rankedChunks = matchedChunks
+        const rankedChunks = filteredChunks
           .map((chunk) => {
             let score = chunk.similarity;
             

@@ -2,6 +2,7 @@
 import { useState, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import type { Document, DocType } from '@/types';
+import ReindexButton from './ReindexButton';
 
 const DOC_TYPE_LABELS: Record<DocType, string> = {
   hub: 'Hub',
@@ -39,14 +40,38 @@ export default function DocumentPanel({ documents, onDocumentsChange }: Props) {
   const [uploads, setUploads] = useState<UploadState[]>([]);
   const [isExpanded, setIsExpanded] = useState(true);
 
+  // Upload a single file directly — no stale-index dependency
+  const uploadFile = useCallback(async (file: File, docType: DocType) => {
+    const id = `${file.name}-${Date.now()}`;
+
+    setUploads((prev) => [...prev, { file, docType, status: 'uploading', progress: 0 }]);
+
+    try {
+      const form = new FormData();
+      form.append('file', file);
+      form.append('doc_type', docType);
+
+      const res = await fetch('/api/ingest', { method: 'POST', body: form });
+      const data = await res.json();
+
+      setUploads((prev) => prev.map((u) =>
+        u.file === file
+          ? data.success
+            ? { ...u, status: 'done', progress: 100, chunkCount: data.chunk_count }
+            : { ...u, status: 'error', error: data.error, progress: undefined }
+          : u
+      ));
+      if (data.success) onDocumentsChange();
+    } catch {
+      setUploads((prev) => prev.map((u) =>
+        u.file === file ? { ...u, status: 'error', error: 'Network error', progress: undefined } : u
+      ));
+    }
+  }, [onDocumentsChange]);
+
   const onDrop = useCallback((acceptedFiles: File[]) => {
-    const newUploads: UploadState[] = acceptedFiles.map((file) => ({
-      file,
-      docType: inferDocTypeClient(file.name),
-      status: 'pending',
-    }));
-    setUploads((prev) => [...prev, ...newUploads]);
-  }, []);
+    acceptedFiles.forEach((file) => uploadFile(file, inferDocTypeClient(file.name)));
+  }, [uploadFile]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -54,42 +79,16 @@ export default function DocumentPanel({ documents, onDocumentsChange }: Props) {
     maxSize: 10 * 1024 * 1024,
   });
 
+  // Manual upload for queued items (doc type was changed after drop)
   const processUpload = async (idx: number) => {
     const upload = uploads[idx];
     if (upload.status !== 'pending') return;
-
-    setUploads((prev) => prev.map((u, i) => i === idx ? { ...u, status: 'uploading', progress: 0 } : u));
-
-    try {
-      const form = new FormData();
-      form.append('file', upload.file);
-      form.append('doc_type', upload.docType);
-
-      const res = await fetch('/api/ingest', { 
-        method: 'POST', 
-        body: form,
-      });
-
-      // Simulate progress updates during upload
-      // Note: Real progress tracking would require streaming/chunked uploads
-      // For now, we show indeterminate progress during processing
-      setUploads((prev) => prev.map((u, i) => i === idx ? { ...u, progress: 50 } : u));
-
-      const data = await res.json();
-
-      if (data.success) {
-        setUploads((prev) => prev.map((u, i) => i === idx ? { ...u, status: 'done', progress: 100, chunkCount: data.chunk_count } : u));
-        onDocumentsChange();
-      } else {
-        setUploads((prev) => prev.map((u, i) => i === idx ? { ...u, status: 'error', error: data.error, progress: undefined } : u));
-      }
-    } catch (err) {
-      setUploads((prev) => prev.map((u, i) => i === idx ? { ...u, status: 'error', error: 'Network error', progress: undefined } : u));
-    }
+    await uploadFile(upload.file, upload.docType);
+    setUploads((prev) => prev.filter((_, i) => i !== idx));
   };
 
   const processAll = () => {
-    uploads.forEach((_, i) => processUpload(i));
+    uploads.forEach((u, i) => { if (u.status === 'pending') processUpload(i); });
   };
 
   const deleteDocument = async (id: string) => {
@@ -167,7 +166,15 @@ export default function DocumentPanel({ documents, onDocumentsChange }: Props) {
                       {doc.status !== 'ready' && <span className="text-[10px] text-amber-500">{doc.status}</span>}
                     </div>
                   </div>
-                  <button onClick={() => deleteDocument(doc.id)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600 text-xs transition-opacity" title="Delete">✕</button>
+                  <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition-opacity">
+                    <ReindexButton
+                      document={doc}
+                      onSuccess={(newChunkCount) => {
+                        onDocumentsChange();
+                      }}
+                    />
+                    <button onClick={() => deleteDocument(doc.id)} className="text-red-400 hover:text-red-600 text-xs min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 flex items-center justify-center" title="Delete">✕</button>
+                  </div>
                 </div>
               ))}
             </div>

@@ -130,3 +130,8 @@ create index if not exists documents_status_idx on documents (status);
 vacuum analyze chunks;
 vacuum analyze documents;
 vacuum analyze query_logs;
+
+-- Migration: Add content and updated_at columns to documents table
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS content TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ DEFAULT now();
+CREATE INDEX IF NOT EXISTS idx_documents_updated_at ON documents(updated_at);

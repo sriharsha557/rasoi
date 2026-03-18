@@ -54,7 +54,7 @@ The implementation follows a phased approach: core infrastructure setup, documen
     - Test edge cases (empty document, single sentence, very long document)
     - _Requirements: 4.1, 4.2, 4.4_
 
-  - [-]* 2.6 Write property test for chunk overlap invariant
+  - [x]* 2.6 Write property test for chunk overlap invariant
     - **Property 7: Chunk Overlap Invariant**
     - **Validates: Requirements 4.3, 18.1, 18.2**
 

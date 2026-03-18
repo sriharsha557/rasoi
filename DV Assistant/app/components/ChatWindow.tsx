@@ -3,6 +3,13 @@ import { useState, useRef, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { ChatMessage, DocType, Source } from '@/types';
+import ExportButton from './ExportButton';
+import QueryHistoryDropdown from './QueryHistoryDropdown';
+import { queryHistory } from '@/lib/queryHistory';
+import SimilarityThresholdSlider from './SimilarityThresholdSlider';
+import type { SimilarityThresholdConfig } from '@/types';
+import StreamingErrorBanner from './StreamingErrorBanner';
+import { StreamingBuffer } from '@/lib/streamingBuffer';
 
 const SUGGESTED = [
   'What defines a Hub in Data Vault?',
@@ -26,8 +33,13 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
   const [docTypeFilter, setDocTypeFilter] = useState<DocType | ''>('');
+  const [showHistory, setShowHistory] = useState(false);
+  const [historySuggestions, setHistorySuggestions] = useState(queryHistory.getRecentQueries());
+  const [thresholdConfig, setThresholdConfig] = useState<SimilarityThresholdConfig>({ threshold: 0.5, enabled: false });
+  const [filterBarOpen, setFilterBarOpen] = useState(false);
   const bottomRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const inputWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -45,18 +57,31 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
       content: '', 
       timestamp: new Date(), 
       isStreaming: true,
-      query: query // Store the query for feedback
+      query: query,
+      originalQuery: query,
     };
 
     setMessages((prev) => [...prev, userMsg, assistantMsg]);
     setLoading(true);
+
+    const buffer = new StreamingBuffer();
+
+    const handleStreamError = () => {
+      const partial = buffer.getPartialContent();
+      setMessages((prev) => prev.map((m) =>
+        m.id === assistantId
+          ? { ...m, content: partial, isStreaming: false, hasError: true }
+          : m
+      ));
+      setLoading(false);
+    };
 
     try {
       const history = messages.slice(-6).map((m) => ({ role: m.role, content: m.content }));
       const res = await fetch('/api/query', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, doc_type_filter: docTypeFilter || null, top_k: 5, chat_history: history }),
+        body: JSON.stringify({ query, doc_type_filter: docTypeFilter || null, top_k: 5, chat_history: history, ...(thresholdConfig.enabled ? { similarity_threshold: thresholdConfig.threshold } : {}) }),
       });
 
       if (!res.ok) throw new Error('Query failed');
@@ -64,17 +89,19 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
+      let lineBuffer = '';
       let sources: Source[] = [];
-      let fullContent = '';
+
+      // Start 30s timeout watcher
+      buffer.startTimeoutWatcher(30000, handleStreamError);
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
+        lineBuffer += decoder.decode(value, { stream: true });
+        const lines = lineBuffer.split('\n');
+        lineBuffer = lines.pop() ?? '';
 
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
@@ -84,23 +111,40 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
               sources = event.sources;
               setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, sources } : m));
             } else if (event.type === 'token') {
-              fullContent += event.token;
-              setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: fullContent } : m));
+              buffer.append(event.token);
+              // Reset timeout on each token
+              buffer.startTimeoutWatcher(30000, handleStreamError);
+              setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: buffer.getPartialContent() } : m));
             } else if (event.type === 'done') {
+              buffer.clear();
               setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, isStreaming: false } : m));
+              queryHistory.addQuery(query);
+              setHistorySuggestions(queryHistory.getRecentQueries());
+            } else if (event.type === 'error') {
+              handleStreamError();
+              return;
             }
           } catch {}
         }
       }
     } catch (err) {
-      setMessages((prev) => prev.map((m) => m.id === assistantId ? { ...m, content: 'Something went wrong. Please try again.', isStreaming: false } : m));
+      handleStreamError();
     } finally {
       setLoading(false);
     }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(input); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); setShowHistory(false); sendMessage(input); }
+    if (e.key === 'Escape') setShowHistory(false);
+  };
+
+  const handleInputChange = (value: string) => {
+    setInput(value);
+    const suggestions = value.trim()
+      ? queryHistory.searchHistory(value)
+      : queryHistory.getRecentQueries();
+    setHistorySuggestions(suggestions);
   };
 
   const hasConversation = messages.length > 0;
@@ -110,9 +154,12 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
       {/* Persistent Header */}
       <div className={`border-b border-dv-border bg-dv-surface/50 transition-all duration-300 ${hasConversation ? 'py-3' : 'py-6'}`}>
         <div className="max-w-3xl mx-auto px-5">
+          <div className="flex items-center justify-between">
           <h2 className={`font-semibold text-dv-text transition-all duration-300 ${hasConversation ? 'text-xl mb-1' : 'text-3xl mb-2'}`}>
             Hello, EDWH Engineer! 👋
           </h2>
+          <ExportButton messages={messages} />
+          </div>
           <p className={`text-dv-muted transition-all duration-300 ${hasConversation ? 'text-xs' : 'text-sm mb-2'}`}>
             I am your Data Vault Knowledge Assistant!
           </p>
@@ -125,11 +172,25 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
       </div>
 
       {/* Filter bar */}
-      <div className="flex items-center gap-3 px-5 py-2.5 border-b border-dv-border bg-dv-surface/30">
-        <span className="text-xs text-dv-muted">Filter:</span>
-        <select value={docTypeFilter} onChange={(e) => setDocTypeFilter(e.target.value as DocType | '')} className="text-xs bg-transparent border border-dv-border rounded-md px-2 py-1 text-dv-text focus:outline-none focus:border-dv-accent">
-          {DOC_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
-        </select>
+      <div className="border-b border-dv-border bg-dv-surface/30">
+        {/* Mobile toggle */}
+        <button
+          className="md:hidden w-full flex items-center justify-between px-5 py-2 text-xs text-dv-muted"
+          onClick={() => setFilterBarOpen((v) => !v)}
+          aria-expanded={filterBarOpen}
+        >
+          <span>Filters &amp; Settings</span>
+          <span>{filterBarOpen ? '▲' : '▼'}</span>
+        </button>
+        <div className={`flex items-center gap-3 px-5 py-2.5 flex-wrap ${filterBarOpen ? 'flex' : 'hidden md:flex'}`}>
+          <span className="text-xs text-dv-muted">Filter:</span>
+          <select value={docTypeFilter} onChange={(e) => setDocTypeFilter(e.target.value as DocType | '')} className="text-xs bg-transparent border border-dv-border rounded-md px-2 py-1 text-dv-text focus:outline-none focus:border-dv-accent min-h-[44px] md:min-h-0">
+            {DOC_TYPE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <div className="ml-auto">
+            <SimilarityThresholdSlider onChange={setThresholdConfig} />
+          </div>
+        </div>
       </div>
 
       {/* Messages */}
@@ -290,8 +351,28 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
                     {msg.isStreaming && msg.content && <span className="inline-block w-1.5 h-4 bg-white animate-pulse ml-0.5 rounded-sm" />}
                   </div>
                   {msg.sources && msg.sources.length > 0 && <SourceList sources={msg.sources} />}
-                  {!msg.isStreaming && msg.content && (
+                  {!msg.isStreaming && msg.content && !msg.hasError && (
                     <MessageActions messageId={msg.id} content={msg.content} query={msg.query || ''} />
+                  )}
+                  {msg.hasError && (
+                    <StreamingErrorBanner
+                      partialContent={msg.content}
+                      onRetry={() => {
+                        // Remove the errored message and re-send
+                        setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+                        sendMessage(msg.originalQuery || msg.query || '');
+                      }}
+                      onKeep={() => {
+                        setMessages((prev) => prev.map((m) =>
+                          m.id === msg.id ? { ...m, hasError: false } : m
+                        ));
+                      }}
+                      onEditRetry={() => {
+                        setMessages((prev) => prev.filter((m) => m.id !== msg.id));
+                        setInput(msg.originalQuery || msg.query || '');
+                        inputRef.current?.focus();
+                      }}
+                    />
                   )}
                 </div>
               )}
@@ -305,25 +386,35 @@ export default function ChatWindow({ hasDocuments }: { hasDocuments: boolean }) 
       {/* Input */}
       <div className="border-t border-dv-border py-4">
         <div className="max-w-3xl mx-auto px-5">
-          <div className={`flex gap-2 items-end border rounded-xl px-3 py-2 transition-colors ${loading ? 'border-dv-border' : 'border-dv-border focus-within:border-dv-accent'}`}>
-            <textarea
-              ref={inputRef}
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
-              placeholder="Ask about your documents..."
-              disabled={loading}
-              rows={1}
-              className="flex-1 bg-transparent text-sm text-dv-text placeholder-dv-muted resize-none focus:outline-none max-h-32 min-h-[1.5rem]"
-              style={{ fieldSizing: 'content' } as React.CSSProperties}
-            />
-            <button
-              onClick={() => sendMessage(input)}
-              disabled={!input.trim() || loading}
-              className="p-1.5 bg-dv-accent text-white rounded-lg disabled:opacity-40 hover:bg-dv-accent/90 transition-all flex-shrink-0"
-            >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-            </button>
+          <div ref={inputWrapperRef} className="relative">
+            {showHistory && (
+              <QueryHistoryDropdown
+                suggestions={historySuggestions}
+                onSelect={(q) => { setInput(q); setShowHistory(false); inputRef.current?.focus(); }}
+                onClose={() => setShowHistory(false)}
+              />
+            )}
+            <div className={`flex gap-2 items-end border rounded-xl px-3 py-2 transition-colors ${loading ? 'border-dv-border' : 'border-dv-border focus-within:border-dv-accent'}`}>
+              <textarea
+                ref={inputRef}
+                value={input}
+                onChange={(e) => handleInputChange(e.target.value)}
+                onFocus={() => setShowHistory(true)}
+                onKeyDown={handleKeyDown}
+                placeholder="Ask about your documents..."
+                disabled={loading}
+                rows={1}
+                className="flex-1 bg-transparent text-sm text-dv-text placeholder-dv-muted resize-none focus:outline-none max-h-32 min-h-[1.5rem]"
+                style={{ fieldSizing: 'content' } as React.CSSProperties}
+              />
+              <button
+                onClick={() => { setShowHistory(false); sendMessage(input); }}
+                disabled={!input.trim() || loading}
+                className="p-1.5 md:p-1.5 min-w-[44px] min-h-[44px] md:min-w-0 md:min-h-0 bg-dv-accent text-white rounded-lg disabled:opacity-40 hover:bg-dv-accent/90 transition-all flex-shrink-0 flex items-center justify-center"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+              </button>
+            </div>
           </div>
           <p className="text-[10px] text-dv-muted mt-1.5 text-center">Shift+Enter for new line · Enter to send</p>
         </div>
