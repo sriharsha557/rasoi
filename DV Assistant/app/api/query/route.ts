@@ -39,7 +39,23 @@ export async function POST(req: NextRequest) {
         });
 
         if (error || !chunks || chunks.length === 0) {
-          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'error', error: 'No relevant documents found' })}\n\n`));
+          // No docs found — answer as general DV assistant without RAG context
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'sources', sources: [] })}\n\n`));
+          const fallback = await groq.chat.completions.create({
+            model: 'llama-3.1-8b-instant',
+            messages: [
+              { role: 'system', content: buildSystemPrompt() },
+              { role: 'user', content: query },
+            ],
+            temperature: 0.3,
+            max_tokens: 1024,
+            stream: true,
+          });
+          for await (const chunk of fallback) {
+            const token = chunk.choices[0]?.delta?.content || '';
+            if (token) controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'token', token })}\n\n`));
+          }
+          controller.enqueue(encoder.encode(`data: ${JSON.stringify({ type: 'done' })}\n\n`));
           controller.close();
           return;
         }
