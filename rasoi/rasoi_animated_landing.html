@@ -1,0 +1,245 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+@keyframes float{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
+@keyframes pulse-ring{0%{transform:scale(1);opacity:.4}100%{transform:scale(1.6);opacity:0}}
+@keyframes fadeUp{from{opacity:0;transform:translateY(18px)}to{opacity:1;transform:translateY(0)}}
+@keyframes bounce{0%,100%{transform:translateY(0)}40%{transform:translateY(-10px)}60%{transform:translateY(-5px)}}
+@keyframes wiggle{0%,100%{transform:rotate(0)}25%{transform:rotate(-10deg)}75%{transform:rotate(10deg)}}
+@keyframes talk{0%,100%{d:path("M41 62 Q50 68 59 62")}50%{d:path("M41 62 Q50 64 59 62")}}
+@keyframes blink{0%,90%,100%{transform:scaleY(1)}95%{transform:scaleY(0.1)}}
+@keyframes shimmer{0%{opacity:.3}50%{opacity:.7}100%{opacity:.3}}
+@keyframes orb1{0%,100%{transform:translate(0,0)}33%{transform:translate(18px,-12px)}66%{transform:translate(-10px,8px)}}
+@keyframes orb2{0%,100%{transform:translate(0,0)}33%{transform:translate(-14px,10px)}66%{transform:translate(12px,-8px)}}
+@keyframes orb3{0%,100%{transform:translate(0,0)}50%{transform:translate(10px,14px)}}
+@keyframes cardIn{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:translateY(0)}}
+@keyframes scan-line{0%{top:0}100%{top:100%}}
+
+.hero{text-align:center;padding:48px 24px 40px;position:relative;overflow:hidden}
+.orb{position:absolute;border-radius:50%;pointer-events:none}
+.orb1{width:200px;height:200px;background:#E1F5EE;top:-60px;left:-40px;animation:orb1 8s ease-in-out infinite}
+.orb2{width:160px;height:160px;background:#E1F5EE;top:20px;right:-30px;animation:orb2 10s ease-in-out infinite}
+.orb3{width:120px;height:120px;background:#f0faf5;bottom:0;left:30%;animation:orb3 12s ease-in-out infinite}
+
+.badge{display:inline-flex;align-items:center;gap:6px;background:#E1F5EE;color:#085041;font-size:11px;font-weight:500;letter-spacing:.08em;padding:5px 12px;border-radius:20px;margin-bottom:20px;animation:fadeUp .5s ease both}
+.badge-dot{width:6px;height:6px;background:#1D9E75;border-radius:50%;animation:shimmer 2s ease-in-out infinite}
+
+.logo-wrap{animation:fadeUp .6s .1s ease both;margin-bottom:12px}
+.logo-text{font-size:52px;font-weight:700;color:var(--color-text-primary);letter-spacing:-2px;line-height:1}
+.logo-oi{color:#1D9E75;position:relative;display:inline-block}
+.oi-ring{position:absolute;inset:-4px;border-radius:6px;border:2px solid #1D9E75;animation:pulse-ring 2.4s ease-out infinite}
+
+.tagline{font-size:20px;font-weight:500;color:var(--color-text-primary);margin-bottom:8px;animation:fadeUp .6s .2s ease both}
+.sub{font-size:14px;color:var(--color-text-secondary);line-height:1.6;max-width:380px;margin:0 auto 28px;animation:fadeUp .6s .3s ease both}
+
+.cta-row{display:flex;justify-content:center;gap:10px;flex-wrap:wrap;margin-bottom:16px;animation:fadeUp .6s .4s ease both}
+.btn-primary{background:#1D9E75;color:#fff;border:none;padding:12px 24px;border-radius:50px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s,transform .1s}
+.btn-primary:hover{background:#0F6E56;transform:scale(1.03)}
+.btn-primary:active{transform:scale(.97)}
+.btn-outline{background:transparent;color:var(--color-text-primary);border:1.5px solid var(--color-border-secondary);padding:12px 24px;border-radius:50px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:8px;transition:background .15s,transform .1s}
+.btn-outline:hover{background:var(--color-background-secondary);transform:scale(1.03)}
+
+.or-row{display:flex;align-items:center;gap:10px;justify-content:center;margin-bottom:14px;animation:fadeUp .6s .5s ease both}
+.or-line{flex:0 0 48px;height:1px;background:var(--color-border-tertiary)}
+.or-text{font-size:12px;color:var(--color-text-tertiary)}
+
+.guest-btn{background:transparent;border:1px solid var(--color-border-secondary);color:var(--color-text-secondary);padding:9px 20px;border-radius:50px;font-size:13px;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:background .15s;animation:fadeUp .6s .55s ease both}
+.guest-btn:hover{background:var(--color-background-secondary)}
+.hint{font-size:11px;color:var(--color-text-tertiary);margin-top:8px;animation:fadeUp .6s .6s ease both}
+.hint span{color:#1D9E75}
+
+.chammach-float{animation:float 3.2s ease-in-out infinite;cursor:pointer;display:inline-block;margin:20px auto 0;position:relative;animation:fadeUp .7s .7s ease both,float 3.2s 1.4s ease-in-out infinite}
+.chammach-float:hover .spoon-svg{animation:wiggle .5s ease-in-out}
+.speech{position:absolute;bottom:110%;left:50%;transform:translateX(-50%);background:var(--color-background-primary);border:1px solid var(--color-border-secondary);border-radius:12px;padding:8px 12px;font-size:12px;color:var(--color-text-primary);white-space:nowrap;opacity:0;transition:opacity .3s;pointer-events:none}
+.speech::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--color-border-secondary)}
+.chammach-float:hover .speech{opacity:1}
+
+.how-section{background:var(--color-background-secondary);padding:40px 24px;text-align:center}
+.how-title{font-size:20px;font-weight:500;color:var(--color-text-primary);margin-bottom:28px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;max-width:600px;margin:0 auto}
+.card{background:var(--color-background-primary);border:0.5px solid var(--color-border-tertiary);border-radius:var(--border-radius-lg);padding:24px 16px;text-align:center;cursor:pointer;transition:transform .2s,border-color .2s;opacity:0}
+.card.visible{animation:cardIn .5s ease forwards}
+.card:hover{transform:translateY(-4px);border-color:var(--color-border-secondary)}
+.card-icon{width:44px;height:44px;border-radius:12px;display:flex;align-items:center;justify-content:center;margin:0 auto 14px;font-size:22px}
+.card-icon.scan{background:#E1F5EE;color:#1D9E75}
+.card-icon.pantry{background:#E1F5EE;color:#1D9E75}
+.card-icon.cook{background:#E1F5EE;color:#1D9E75}
+.card-title{font-size:14px;font-weight:500;color:var(--color-text-primary);margin-bottom:6px}
+.card-desc{font-size:12px;color:var(--color-text-secondary);line-height:1.55}
+.card-desc span{color:#1D9E75}
+
+.scan-demo{position:relative;width:40px;height:40px;margin:0 auto}
+.scan-inner{width:100%;height:100%;border-radius:8px;background:#f0faf5;overflow:hidden;position:relative}
+.scan-bar{position:absolute;left:0;right:0;height:2px;background:#1D9E75;opacity:.7;animation:scan-line 1.8s ease-in-out infinite}
+
+.expiry-dots{display:flex;gap:4px;justify-content:center;margin-top:6px}
+.dot{width:8px;height:8px;border-radius:50%}
+
+.navbar{display:flex;align-items:center;justify-content:space-between;padding:14px 24px;border-bottom:0.5px solid var(--color-border-tertiary);background:var(--color-background-primary)}
+.nav-logo{font-size:18px;font-weight:700;color:var(--color-text-primary);letter-spacing:-0.5px}
+.nav-logo span{color:#1D9E75}
+.nav-sub{font-size:10px;color:#085041;font-weight:500;letter-spacing:.06em;text-transform:uppercase;margin-left:6px;vertical-align:2px}
+.nav-scan{background:#1D9E75;color:#fff;border:none;padding:7px 16px;border-radius:20px;font-size:13px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .15s}
+.nav-scan:hover{background:#0F6E56}
+</style>
+
+<div class="navbar">
+  <div>
+    <span class="nav-logo">Ras<span>OI</span></span>
+    <span class="nav-sub">Organic Intelligence</span>
+  </div>
+  <button class="nav-scan"><i class="ti ti-plus" aria-hidden="true"></i> Scan</button>
+</div>
+
+<div class="hero">
+  <div class="orb orb1"></div>
+  <div class="orb orb2"></div>
+  <div class="orb orb3"></div>
+
+  <div class="badge"><span class="badge-dot"></span> Organic Intelligence</div>
+
+  <div class="logo-wrap">
+    <span class="logo-text">Ras<span class="logo-oi">OI<span class="oi-ring"></span></span></span>
+  </div>
+
+  <p class="tagline">Your kitchen's organic intelligence layer.</p>
+  <p class="sub">Scan your fridge, discover zero-waste meals, and let AI handle the rest — one scan to cook.</p>
+
+  <div class="cta-row">
+    <button class="btn-primary" onclick="triggerScan()">
+      <i class="ti ti-camera" aria-hidden="true"></i> Scan my fridge
+    </button>
+    <button class="btn-outline" onclick="triggerScan()">
+      <i class="ti ti-receipt" aria-hidden="true"></i> Scan receipt
+    </button>
+  </div>
+
+  <div class="or-row">
+    <div class="or-line"></div>
+    <span class="or-text">or</span>
+    <div class="or-line"></div>
+  </div>
+
+  <button class="guest-btn"><i class="ti ti-user" aria-hidden="true"></i> Continue as guest</button>
+  <p class="hint">No sign-up needed — data saved <span>locally</span> in your browser.</p>
+
+  <div class="chammach-float" id="chammach" onclick="chammachTalk()">
+    <div class="speech" id="speech">Namaste! Show me your fridge!</div>
+    <svg class="spoon-svg" id="spoon-svg" width="64" height="130" viewBox="0 0 64 130">
+      <ellipse cx="32" cy="28" rx="22" ry="24" fill="#1D9E75"/>
+      <ellipse cx="32" cy="28" rx="16" ry="17" fill="#5DCAA5"/>
+      <rect x="28" y="50" width="8" height="70" rx="4" fill="#1D9E75"/>
+      <rect x="30" y="50" width="5" height="70" rx="3" fill="#0F6E56" opacity=".35"/>
+      <g id="eye-l" style="transform-origin:22px 23px;animation:blink 4s ease-in-out infinite">
+        <ellipse cx="22" cy="22" rx="4" ry="5" fill="white" opacity=".9"/>
+        <circle cx="23" cy="23" r="2.5" fill="#04342C"/>
+        <circle cx="23.8" cy="22.2" r=".8" fill="white"/>
+      </g>
+      <g id="eye-r" style="transform-origin:42px 23px;animation:blink 4s .3s ease-in-out infinite">
+        <ellipse cx="42" cy="22" rx="4" ry="5" fill="white" opacity=".9"/>
+        <circle cx="43" cy="23" r="2.5" fill="#04342C"/>
+        <circle cx="43.8" cy="22.2" r=".8" fill="white"/>
+      </g>
+      <ellipse cx="32" cy="37" rx="7" ry="4" fill="#04342C" id="mouth"/>
+      <ellipse cx="32" cy="36.5" rx="5" ry="2.5" fill="#5DCAA5" id="mouth-inner"/>
+      <ellipse cx="18" cy="26" rx="3" ry="4" fill="#9FE1CB" opacity=".5"/>
+      <ellipse cx="46" cy="26" rx="3" ry="4" fill="#9FE1CB" opacity=".5"/>
+      <ellipse cx="22" cy="32" rx="3.5" ry="2" fill="#E8836A" opacity=".45"/>
+      <ellipse cx="42" cy="32" rx="3.5" ry="2" fill="#E8836A" opacity=".45"/>
+    </svg>
+  </div>
+</div>
+
+<div class="how-section">
+  <p class="how-title">How RasOI works</p>
+  <div class="cards">
+    <div class="card" id="c1">
+      <div class="card-icon scan">
+        <div class="scan-demo">
+          <div class="scan-inner">
+            <div class="scan-bar"></div>
+          </div>
+        </div>
+      </div>
+      <p class="card-title">Scan & detect</p>
+      <p class="card-desc">Upload a fridge photo or grocery receipt. Our <span>AI</span> extracts every ingredient instantly.</p>
+    </div>
+    <div class="card" id="c2">
+      <div class="card-icon pantry"><i class="ti ti-layout-grid" aria-hidden="true" style="font-size:22px"></i></div>
+      <p class="card-title">Live pantry</p>
+      <p class="card-desc">See your inventory at a glance with colour-coded expiry alerts —</p>
+      <div class="expiry-dots">
+        <div class="dot" style="background:#27ae60"></div>
+        <div class="dot" style="background:#e67e22"></div>
+        <div class="dot" style="background:#c0392b"></div>
+      </div>
+    </div>
+    <div class="card" id="c3">
+      <div class="card-icon cook"><i class="ti ti-chef-hat" aria-hidden="true" style="font-size:22px"></i></div>
+      <p class="card-title">Cook smarter</p>
+      <p class="card-desc">Get <span>AI-ranked</span> meal suggestions that use what expires soonest. Zero waste, every time.</p>
+    </div>
+  </div>
+</div>
+
+<div style="background:var(--color-background-primary);padding:28px 24px;text-align:center;border-top:0.5px solid var(--color-border-tertiary)">
+  <p style="font-size:16px;font-weight:500;color:var(--color-text-primary);margin-bottom:6px">Meet Chammach</p>
+  <p style="font-size:13px;color:var(--color-text-secondary);margin-bottom:16px">Your agentic kitchen companion — he watches, thinks, and acts so you don't have to.</p>
+  <button class="btn-primary" style="margin:0 auto" onclick="sendPrompt('Build the Chammach.jsx React component')">
+    <i class="ti ti-code" aria-hidden="true"></i> Build Chammach.jsx now
+  </button>
+</div>
+
+<script>
+const dialogues = [
+  "Namaste! Show me your fridge!",
+  "Your paneer expires tomorrow!",
+  "I found 3 meals you can cook!",
+  "No cream? Use milk + butter!",
+  "Well cooked! Pantry updated!",
+];
+let dIdx = 0;
+const speechEl = document.getElementById('speech');
+const mouth = document.getElementById('mouth');
+const mouthInner = document.getElementById('mouth-inner');
+
+function chammachTalk(){
+  dIdx = (dIdx+1) % dialogues.length;
+  speechEl.textContent = dialogues[dIdx];
+  speechEl.style.opacity = '1';
+  const spoon = document.getElementById('spoon-svg');
+  spoon.style.animation = 'wiggle .5s ease-in-out';
+  spoon.addEventListener('animationend',()=>{ spoon.style.animation=''; },{ once:true });
+  let t=0;
+  const talkInterval = setInterval(()=>{
+    t++;
+    const open = t%2===0;
+    mouth.setAttribute('ry', open?'4':'1.5');
+    mouthInner.setAttribute('ry', open?'2.5':'1');
+    if(t>8){ clearInterval(talkInterval); mouth.setAttribute('ry','4'); mouthInner.setAttribute('ry','2.5'); }
+  },140);
+  setTimeout(()=>{ speechEl.style.opacity='0'; },3200);
+}
+
+function triggerScan(){
+  speechEl.style.opacity='1';
+  speechEl.textContent='Show me what you have!';
+  const spoon = document.getElementById('spoon-svg');
+  spoon.style.animation='bounce .6s ease-in-out';
+  spoon.addEventListener('animationend',()=>{ spoon.style.animation=''; },{ once:true });
+  setTimeout(()=>{ speechEl.style.opacity='0'; },2400);
+}
+
+const obs = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){ e.target.classList.add('visible'); obs.unobserve(e.target); }
+  });
+},{ threshold:.2 });
+['c1','c2','c3'].forEach((id,i)=>{
+  const el = document.getElementById(id);
+  el.style.animationDelay = (i*0.12)+'s';
+  obs.observe(el);
+});
+
+setTimeout(()=>{ chammachTalk(); },2000);
+</script>
