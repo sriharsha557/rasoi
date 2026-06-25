@@ -1,0 +1,29 @@
+{
+  "name": "rasoi-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:frontend": "cd frontend && npm run dev",
+    "dev:backend": "cd backend && venv\\Scripts\\python main.py",
+    "build:frontend": "cd frontend && npm run build",
+    "install:frontend": "cd frontend && npm install",
+    "install:backend": "cd backend && venv\\Scripts\\pip install -r requirements.txt",
+    "setup:backend": "cd backend && python -m venv venv && venv\\Scripts\\pip install -r requirements.txt",
+    "lint:frontend": "cd frontend && npm run lint"
+  },
+  "description": "RasOI Kitchen Intelligence - Monorepo for frontend and backend",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/rasoi"
+  },
+  "keywords": [
+    "kitchen",
+    "ai",
+    "food-waste",
+    "claude",
+    "react",
+    "fastapi"
+  ],
+  "author": "RasOI Team",
+  "license": "PROPRIETARY"
+}

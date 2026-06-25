@@ -1,0 +1,271 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: var(--font-sans); }
+
+  .scene {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem 1.5rem;
+    gap: 0;
+  }
+
+  .bubble-wrap {
+    position: relative;
+    max-width: 320px;
+    width: 100%;
+    margin-bottom: 12px;
+  }
+
+  .bubble {
+    background: var(--color-background-primary);
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 16px;
+    padding: 14px 18px;
+    font-size: 15px;
+    color: var(--color-text-primary);
+    line-height: 1.5;
+    text-align: center;
+    min-height: 56px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: opacity 0.3s ease;
+  }
+
+  .bubble::after {
+    content: '';
+    position: absolute;
+    bottom: -10px;
+    left: 50%;
+    transform: translateX(-50%);
+    border-left: 10px solid transparent;
+    border-right: 10px solid transparent;
+    border-top: 10px solid var(--color-background-primary);
+    filter: drop-shadow(0 1px 0 var(--color-border-secondary));
+  }
+
+  .spoon-wrap {
+    position: relative;
+    width: 100px;
+    height: 200px;
+    cursor: pointer;
+    margin-top: 4px;
+  }
+
+  .spoon-svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+  }
+
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(0deg); }
+    20% { transform: rotate(-12deg); }
+    40% { transform: rotate(12deg); }
+    60% { transform: rotate(-8deg); }
+    80% { transform: rotate(8deg); }
+  }
+
+  @keyframes talk {
+    0%, 100% { transform: scaleY(1); }
+    50% { transform: scaleY(0.3); }
+  }
+
+  .spoon-wrap.bouncing { animation: bounce 1.2s ease-in-out; }
+  .spoon-wrap.wiggling { animation: wiggle 0.6s ease-in-out; }
+  .mouth { transform-origin: center; }
+  .spoon-wrap.talking .mouth { animation: talk 0.25s ease-in-out infinite; }
+
+  .state-btns {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 8px;
+    width: 100%;
+    max-width: 480px;
+    margin-top: 1.5rem;
+    padding: 0 0.5rem;
+  }
+
+  .state-btn {
+    font-size: 12px;
+    padding: 8px 10px;
+    border-radius: var(--border-radius-md);
+    border: 0.5px solid var(--color-border-secondary);
+    background: var(--color-background-secondary);
+    color: var(--color-text-primary);
+    cursor: pointer;
+    text-align: left;
+    line-height: 1.3;
+    transition: background 0.15s;
+  }
+  .state-btn:hover { background: var(--color-background-tertiary); }
+  .state-btn .emoji { font-size: 14px; margin-right: 5px; }
+  .state-btn .label { font-size: 11px; color: var(--color-text-secondary); display: block; margin-top: 2px; }
+
+  .hint {
+    font-size: 12px;
+    color: var(--color-text-tertiary);
+    margin-top: 1rem;
+    text-align: center;
+  }
+</style>
+
+<div class="scene">
+  <div class="bubble-wrap">
+    <div class="bubble" id="bubble">Namaste! I'm Chammach 🥄<br>Show me your fridge and I'll handle the rest!</div>
+  </div>
+
+  <div class="spoon-wrap" id="spoon" onclick="onSpoonClick()">
+    <svg class="spoon-svg" viewBox="0 0 100 200" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="spoonGrad" cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stop-color="#5DCAA5"/>
+          <stop offset="100%" stop-color="#0F6E56"/>
+        </radialGradient>
+        <radialGradient id="faceGrad" cx="40%" cy="35%" r="60%">
+          <stop offset="0%" stop-color="#9FE1CB"/>
+          <stop offset="100%" stop-color="#1D9E75"/>
+        </radialGradient>
+      </defs>
+
+      <ellipse cx="50" cy="52" rx="34" ry="38" fill="url(#spoonGrad)" />
+      <ellipse cx="50" cy="52" rx="26" ry="30" fill="url(#faceGrad)" />
+
+      <rect x="44" y="88" width="12" height="90" rx="6" fill="url(#spoonGrad)" />
+      <rect x="46" y="88" width="8" height="90" rx="4" fill="#1D9E75" opacity="0.4"/>
+
+      <ellipse cx="39" cy="44" rx="5" ry="6" fill="white" opacity="0.9"/>
+      <ellipse cx="61" cy="44" rx="5" ry="6" fill="white" opacity="0.9"/>
+      <circle cx="40" cy="45" r="3" fill="#085041" id="eye-l"/>
+      <circle cx="62" cy="45" r="3" fill="#085041" id="eye-r"/>
+      <circle cx="41" cy="44" r="1" fill="white"/>
+      <circle cx="63" cy="44" r="1" fill="white"/>
+
+      <ellipse cx="50" cy="64" rx="9" ry="5" fill="#085041" class="mouth" id="mouth"/>
+      <ellipse cx="50" cy="63" rx="7" ry="3" fill="#5DCAA5" id="mouth-inner"/>
+
+      <ellipse cx="32" cy="52" rx="4" ry="6" fill="#9FE1CB" opacity="0.6"/>
+      <ellipse cx="68" cy="52" rx="4" ry="6" fill="#9FE1CB" opacity="0.6"/>
+
+      <ellipse cx="37" cy="58" rx="4" ry="2.5" fill="#E8836A" opacity="0.5"/>
+      <ellipse cx="63" cy="58" rx="4" ry="2.5" fill="#E8836A" opacity="0.5"/>
+
+      <ellipse cx="50" cy="172" rx="8" ry="4" fill="#085041" opacity="0.2"/>
+    </svg>
+  </div>
+
+  <div class="state-btns">
+    <button class="state-btn" onclick="setState('scan')">
+      <span class="emoji">📸</span> Scanning fridge
+      <span class="label">trigger scan state</span>
+    </button>
+    <button class="state-btn" onclick="setState('done')">
+      <span class="emoji">✅</span> Scan complete
+      <span class="label">ingredients found</span>
+    </button>
+    <button class="state-btn" onclick="setState('expiry')">
+      <span class="emoji">⏰</span> Expiry detected
+      <span class="label">items going bad</span>
+    </button>
+    <button class="state-btn" onclick="setState('meal')">
+      <span class="emoji">🍽️</span> Meal suggested
+      <span class="label">recommendation ready</span>
+    </button>
+    <button class="state-btn" onclick="setState('missing')">
+      <span class="emoji">🔍</span> Missing ingredient
+      <span class="label">substitution needed</span>
+    </button>
+    <button class="state-btn" onclick="setState('cooked')">
+      <span class="emoji">👨‍🍳</span> Recipe cooked!
+      <span class="label">pantry updated</span>
+    </button>
+    <button class="state-btn" onclick="setState('empty')">
+      <span class="emoji">🛒</span> Pantry empty
+      <span class="label">needs restock</span>
+    </button>
+    <button class="state-btn" onclick="setState('idle')">
+      <span class="emoji">💤</span> Idle nudge
+      <span class="label">user inactive</span>
+    </button>
+  </div>
+
+  <p class="hint">tap Chammach to make him wiggle · tap a state to trigger dialogue</p>
+</div>
+
+<script>
+const dialogues = {
+  idle:    "Namaste! I'm Chammach 🥄\nShow me your fridge and I'll handle the rest!",
+  scan:    "Hmm, let me take a peek inside...\nScanning your ingredients! 🔍",
+  done:    "Found 8 ingredients!\nYour paneer expires tomorrow — want to use it tonight?",
+  expiry:  "Heads up! Some items need attention.\nLet's cook them first before they go bad. ⚠️",
+  meal:    "Perfect match! This recipe uses\n6 of your 8 ingredients. Shall we cook? 🍳",
+  missing: "No cream? No problem.\nMilk + butter works just as well! 🧈",
+  cooked:  "Well cooked! I've updated your pantry.\nWhat's for tomorrow? 😄",
+  empty:   "Your pantry is looking a little empty.\nTime for a grocery run? Scan your receipt when you're back! 🛒",
+};
+
+const bubble = document.getElementById('bubble');
+const spoon  = document.getElementById('spoon');
+let talkTimer = null;
+
+function setState(state) {
+  const text = dialogues[state] || dialogues.idle;
+  bubble.style.opacity = '0';
+  setTimeout(() => {
+    bubble.innerHTML = text.replace(/\n/g, '<br>');
+    bubble.style.opacity = '1';
+  }, 200);
+
+  spoon.classList.remove('bouncing', 'wiggling', 'talking');
+  void spoon.offsetWidth;
+  spoon.classList.add('bouncing', 'talking');
+
+  clearTimeout(talkTimer);
+  talkTimer = setTimeout(() => {
+    spoon.classList.remove('talking');
+  }, 2000);
+
+  spoon.addEventListener('animationend', () => {
+    spoon.classList.remove('bouncing');
+  }, { once: true });
+
+  blinkEyes();
+}
+
+function onSpoonClick() {
+  spoon.classList.remove('wiggling');
+  void spoon.offsetWidth;
+  spoon.classList.add('wiggling');
+  spoon.addEventListener('animationend', () => {
+    spoon.classList.remove('wiggling');
+  }, { once: true });
+}
+
+function blinkEyes() {
+  const el = document.getElementById('eye-l');
+  const er = document.getElementById('eye-r');
+  if (!el || !er) return;
+  const orig = '3';
+  el.setAttribute('ry', '0.5');
+  er.setAttribute('ry', '0.5');
+  setTimeout(() => {
+    el.setAttribute('ry', orig);
+    er.setAttribute('ry', orig);
+  }, 150);
+}
+
+let idleTimer = setInterval(() => {
+  if (document.visibilityState === 'visible') {
+    spoon.classList.remove('bouncing');
+    void spoon.offsetWidth;
+    spoon.classList.add('bouncing');
+    spoon.addEventListener('animationend', () => spoon.classList.remove('bouncing'), { once: true });
+  }
+}, 5000);
+</script>

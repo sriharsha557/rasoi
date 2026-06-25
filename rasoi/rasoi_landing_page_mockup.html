@@ -1,0 +1,267 @@
+
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  .frame {
+    background: var(--color-background-secondary);
+    border-radius: 20px;
+    padding: 12px;
+    width: 100%;
+  }
+  .card {
+    background: var(--color-background-primary);
+    border-radius: 14px;
+    border: 0.5px solid var(--color-border-tertiary);
+    display: grid;
+    grid-template-columns: 44% 56%;
+    min-height: 400px;
+    overflow: hidden;
+  }
+  .photo-side {
+    background: #c97a3a;
+    border-radius: 12px 0 0 12px;
+    overflow: hidden;
+    position: relative;
+    min-height: 380px;
+  }
+  .food-svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+  }
+  .content-side {
+    padding: 32px 28px 28px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+  }
+  .logo-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .logo-spoon {
+    width: 28px;
+    height: 28px;
+  }
+  .logo-text {
+    font-size: 18px;
+    font-weight: 500;
+    color: var(--color-text-primary);
+    letter-spacing: -0.3px;
+  }
+  .logo-text span {
+    color: #0F6E56;
+  }
+  .progress-row {
+    display: flex;
+    gap: 5px;
+    margin-bottom: 6px;
+    align-items: center;
+  }
+  .progress-dot {
+    height: 3px;
+    border-radius: 2px;
+    background: var(--color-border-tertiary);
+    flex: 1;
+  }
+  .progress-dot.active { background: #1D9E75; }
+  .step-label {
+    font-size: 11px;
+    color: var(--color-text-tertiary);
+    margin-bottom: 16px;
+  }
+  .headline {
+    font-size: 22px;
+    font-weight: 500;
+    line-height: 1.25;
+    color: var(--color-text-primary);
+    margin-bottom: 14px;
+  }
+  .desc-box {
+    background: var(--color-background-secondary);
+    border-radius: 10px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--color-text-secondary);
+    line-height: 1.55;
+    margin-bottom: 20px;
+  }
+  .action-btns {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 20px;
+  }
+  .action-btn {
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 10px;
+    padding: 12px 10px;
+    background: var(--color-background-primary);
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    transition: background 0.15s;
+  }
+  .action-btn:hover { background: var(--color-background-secondary); }
+  .action-btn i { font-size: 20px; color: #1D9E75; }
+  .action-btn span {
+    font-size: 12px;
+    color: var(--color-text-secondary);
+    text-align: center;
+    line-height: 1.3;
+  }
+  .cta-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .btn-guest {
+    border: 0.5px solid var(--color-border-secondary);
+    border-radius: 50px;
+    padding: 11px 20px;
+    font-size: 14px;
+    background: transparent;
+    color: var(--color-text-secondary);
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .btn-guest:hover { background: var(--color-background-secondary); }
+  .btn-start {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1D9E75;
+    color: white;
+    border: none;
+    border-radius: 50px;
+    padding: 11px 22px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    flex: 1;
+    justify-content: center;
+    transition: background 0.15s;
+  }
+  .btn-start:hover { background: #0F6E56; }
+  .btn-start i { font-size: 16px; }
+  .chammach-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 14px;
+  }
+  .chammach-bubble {
+    background: #E1F5EE;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 11px;
+    color: #085041;
+    line-height: 1.4;
+    flex: 1;
+  }
+  .chammach-icon {
+    width: 32px;
+    height: 32px;
+    flex-shrink: 0;
+  }
+</style>
+
+<div class="frame">
+  <div class="card">
+
+    <div class="photo-side">
+      <svg class="food-svg" viewBox="0 0 260 400" xmlns="http://www.w3.org/2000/svg">
+        <rect width="260" height="400" fill="#b8601a"/>
+        <ellipse cx="130" cy="230" rx="115" ry="90" fill="#8B3A0A"/>
+        <ellipse cx="130" cy="220" rx="105" ry="78" fill="#2d5a1b"/>
+        <rect x="30" y="190" width="200" height="28" rx="4" fill="#e8d5a3"/>
+        <ellipse cx="55" cy="197" rx="22" ry="12" fill="#d4380d"/>
+        <ellipse cx="100" cy="195" rx="18" ry="10" fill="#d4380d"/>
+        <ellipse cx="160" cy="196" rx="20" ry="11" fill="#d4380d"/>
+        <ellipse cx="210" cy="198" rx="18" ry="10" fill="#d4380d"/>
+        <rect x="25" y="168" width="210" height="35" rx="4" fill="#c8893a"/>
+        <rect x="25" y="153" width="210" height="22" rx="4" fill="#5a3010"/>
+        <rect x="25" y="138" width="210" height="22" rx="4" fill="#c8893a"/>
+        <rect x="22" y="118" width="216" height="28" rx="4" fill="#e8a030"/>
+        <ellipse cx="130" cy="118" rx="108" ry="16" fill="#f0c060"/>
+        <ellipse cx="50" cy="113" rx="9" ry="5" fill="#e8d080"/>
+        <ellipse cx="85" cy="111" rx="7" ry="4" fill="#e8d080"/>
+        <ellipse cx="130" cy="110" rx="8" ry="4" fill="#e8d080"/>
+        <ellipse cx="175" cy="112" rx="7" ry="4" fill="#e8d080"/>
+        <ellipse cx="210" cy="113" rx="8" ry="4" fill="#e8d080"/>
+        <ellipse cx="130" cy="260" rx="90" ry="60" fill="#1a0a00" opacity="0.35"/>
+        <rect x="20" y="218" width="220" height="32" rx="4" fill="#c8761a"/>
+        <ellipse cx="130" cy="220" rx="110" ry="14" fill="#e09040" opacity="0.5"/>
+        <text x="130" y="370" text-anchor="middle" fill="white" font-size="13" opacity="0.7" font-family="sans-serif">scan your pantry</text>
+      </svg>
+    </div>
+
+    <div class="content-side">
+      <div>
+        <div class="logo-row">
+          <svg class="logo-spoon" viewBox="0 0 28 28" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="14" cy="10" rx="8" ry="9" fill="#1D9E75"/>
+            <ellipse cx="14" cy="10" rx="5.5" ry="6.5" fill="#5DCAA5"/>
+            <rect x="12" y="18" width="4" height="8" rx="2" fill="#1D9E75"/>
+            <circle cx="12" cy="8.5" r="1.5" fill="#085041"/>
+            <circle cx="16" cy="8.5" r="1.5" fill="#085041"/>
+            <ellipse cx="14" cy="13" rx="3" ry="1.5" fill="#085041"/>
+          </svg>
+          <span class="logo-text">Ras<span>OI</span></span>
+        </div>
+
+        <div class="progress-row">
+          <div class="progress-dot active"></div>
+          <div class="progress-dot"></div>
+          <div class="progress-dot"></div>
+        </div>
+        <div class="step-label">1 of 3</div>
+
+        <div class="headline">Scan your fridge.<br>Cook what matters.</div>
+
+        <div class="desc-box">
+          Upload a fridge photo or grocery receipt. We'll build your pantry, flag what's expiring, and suggest meals — using what you already have.
+        </div>
+
+        <div class="chammach-badge">
+          <svg class="chammach-icon" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+            <ellipse cx="16" cy="12" rx="9" ry="10" fill="#1D9E75"/>
+            <ellipse cx="16" cy="12" rx="7" ry="7.5" fill="#5DCAA5"/>
+            <rect x="14" y="21" width="4" height="9" rx="2" fill="#1D9E75"/>
+            <circle cx="13" cy="10" r="1.8" fill="white"/>
+            <circle cx="19" cy="10" r="1.8" fill="white"/>
+            <circle cx="13.5" cy="10.3" r="1" fill="#085041"/>
+            <circle cx="19.5" cy="10.3" r="1" fill="#085041"/>
+            <ellipse cx="16" cy="15" rx="3.5" ry="2" fill="#085041"/>
+            <ellipse cx="16" cy="14.5" rx="2.5" ry="1.2" fill="#5DCAA5"/>
+          </svg>
+          <div class="chammach-bubble">
+            Namaste! I'm Chammach. Show me your fridge and I'll handle the rest!
+          </div>
+        </div>
+
+        <div class="action-btns">
+          <button class="action-btn">
+            <i class="ti ti-camera" aria-hidden="true"></i>
+            <span>Scan fridge</span>
+          </button>
+          <button class="action-btn">
+            <i class="ti ti-receipt" aria-hidden="true"></i>
+            <span>Scan receipt</span>
+          </button>
+        </div>
+      </div>
+
+      <div class="cta-row">
+        <button class="btn-guest">Guest</button>
+        <button class="btn-start">
+          Get started <i class="ti ti-arrow-right" aria-hidden="true"></i>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
