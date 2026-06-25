@@ -66,115 +66,16 @@
 }
 
 @layer utilities {
-  /* Chammach Animation: Gentle floating for idle state */
+  /* Chammach Animations */
   @keyframes float {
-    0%, 100% {
-      transform: translateY(0px);
-    }
-    50% {
-      transform: translateY(-10px);
-    }
+    0%, 100% { transform: translateY(0px); }
+    50% { transform: translateY(-10px); }
   }
+  .animate-float { animation: float 3s ease-in-out infinite; }
 
-  .animate-float {
-    animation: float 3s ease-in-out infinite;
-  }
-
-  /* Chammach Animation: Gentle bounce for pantry warnings */
-  @keyframes bounce-gentle {
-    0%, 100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-8px);
-    }
-  }
-
-  .animate-bounce-gentle {
-    animation: bounce-gentle 1s ease-in-out infinite;
-  }
-
-  /* Chammach Animation: Side-to-side sway for recipe suggestions */
-  @keyframes sway {
-    0%, 100% {
-      transform: rotate(-3deg);
-    }
-    50% {
-      transform: rotate(3deg);
-    }
-  }
-
-  .animate-sway {
-    animation: sway 2s ease-in-out infinite;
-    transform-origin: bottom center;
-  }
-
-  /* Chammach Animation: Stirring motion for cooking */
-  @keyframes stir {
-    0% {
-      transform: rotate(0deg) translateX(0);
-    }
-    25% {
-      transform: rotate(5deg) translateX(2px);
-    }
-    50% {
-      transform: rotate(0deg) translateX(0);
-    }
-    75% {
-      transform: rotate(-5deg) translateX(-2px);
-    }
-    100% {
-      transform: rotate(0deg) translateX(0);
-    }
-  }
-
-  .animate-stir {
-    animation: stir 1.5s ease-in-out infinite;
-    transform-origin: bottom center;
-  }
-
-  /* Eye blinking animation */
   @keyframes blink {
-    0%, 90%, 100% {
-      transform: scaleY(1);
-    }
-    95% {
-      transform: scaleY(0.1);
-    }
+    0%, 90%, 100% { transform: scaleY(1); }
+    95% { transform: scaleY(0.1); }
   }
-
-  .animate-blink {
-    animation: blink 4s ease-in-out infinite;
-    transform-origin: center;
-  }
-
-  /* Smile animation for cooking context */
-  @keyframes smile {
-    0%, 100% {
-      d: path('M 44 70 Q 50 74, 56 70');
-    }
-    50% {
-      d: path('M 44 70 Q 50 76, 56 70');
-    }
-  }
-
-  .animate-smile {
-    animation: smile 1s ease-in-out infinite;
-  }
-
-  /* Fade in animation for speech bubbles */
-  @keyframes fade-in {
-    from {
-      opacity: 0;
-      transform: scale(0.95);
-    }
-    to {
-      opacity: 1;
-      transform: scale(1);
-    }
-  }
-
-  .animate-fade-in {
-    animation: fade-in 0.3s ease-out;
-  }
+  .animate-blink { animation: blink 4s ease-in-out infinite; transform-origin: center; }
 }
