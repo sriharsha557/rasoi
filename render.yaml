@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: rasoi-backend
+    env: python
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    plan: free
+    envVars:
+      # Required — Claude Vision, recipe generation, substitutions
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      # Optional — Spoonacular recipe search (tier-1 provider)
+      - key: SPOONACULAR_API_KEY
+        sync: false
+      # Optional — Edamam recipe search (tier-2 provider)
+      - key: EDAMAM_APP_ID
+        sync: false
+      - key: EDAMAM_APP_KEY
+        sync: false
+      # Set this to your Vercel frontend URL after first deploy
+      # e.g. https://rasoi.vercel.app,https://rasoi-xyz.vercel.app
+      - key: ALLOWED_ORIGINS
+        sync: false
