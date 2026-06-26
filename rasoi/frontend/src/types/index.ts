@@ -116,6 +116,7 @@ export interface DeleteResponse {
 
 export interface RecipesResponse {
   recipes: Recipe[];
+  provider?: string;  // 'spoonacular' | 'edamam' | 'claude'
 }
 
 export interface SubstitutionsResponse {
@@ -148,3 +149,33 @@ export interface SubstitutionRequest {
 }
 
 export type ScanType = 'ingredient' | 'receipt';
+
+/**
+ * Chammach agent WebSocket event pushed by the backend.
+ */
+export interface ChammachEvent {
+  type: 'expiry_alert' | 'meal_ready' | 'substitution' | 'idle' | 'low_stock';
+  dialogue: string;
+  animation: 'bounce' | 'wiggle' | 'talk';
+  data?: Record<string, unknown>;
+}
+
+/**
+ * Request payload for creating a new pantry item manually.
+ */
+export interface PantryItemCreateRequest {
+  name: string;
+  quantity: number;
+  unit: string;
+  acquisitionDate?: string;  // ISO 8601; defaults to today on backend
+  expirationDate?: string;   // ISO 8601; defaults to today on backend
+}
+
+/**
+ * Response from POST /api/pantry/cooked
+ */
+export interface CookedResponse {
+  removed: number;
+  remaining: number;
+  message: string;
+}

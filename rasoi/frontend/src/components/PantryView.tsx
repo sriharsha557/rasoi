@@ -8,7 +8,7 @@
  *            2.5 (Update quantity), 2.6 (Sort by expiration)
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { usePantry } from '../context/PantryContext';
 import apiClient, { ApiError } from '../services/apiClient';
 import type { PantryItem } from '../types';
@@ -26,7 +26,7 @@ export default function PantryView() {
   const [editValue, setEditValue] = useState<string>('');
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null);
+  const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   /**
    * Fetch pantry items on component mount

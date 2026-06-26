@@ -8,7 +8,7 @@ import type { Substitution } from '../types';
 export default function RecipePage() {
   const navigate = useNavigate();
   const { state: recipeState, dispatch } = useRecipe();
-  const { dispatch: pantryDispatch } = usePantry();
+  const { state: pantryState, dispatch: pantryDispatch } = usePantry();
   const { currentRecipe, currentStep } = recipeState;
 
   // Per-step: seconds remaining (null = not started)
@@ -54,15 +54,23 @@ export default function RecipePage() {
   const steps = currentRecipe.steps;
   const allStepsDone = completedSteps.size === steps.length;
 
-  const handleMarkCooked = () => {
-    // Remove all ingredients used in this recipe from the pantry
-    currentRecipe.ingredients
+  const handleMarkCooked = async () => {
+    const usedNames = currentRecipe.ingredients
       .filter((ing) => ing.available)
-      .forEach((ing) => {
-        // We delete by matching name (best-effort for guest mode)
-        // In real flow the backend handles this
-      });
+      .map((ing) => ing.name);
     setMarkedCooked(true);
+    try {
+      await apiClient.markCooked(usedNames);
+      // Optimistically remove used items from pantry context
+      usedNames.forEach((name) => {
+        const item = pantryState.pantryItems.find(
+          (i) => i.name.toLowerCase() === name.toLowerCase()
+        );
+        if (item) pantryDispatch({ type: 'DELETE_ITEM', payload: item.id });
+      });
+    } catch {
+      // Proceed even if the API call fails
+    }
     dispatch({ type: 'CLEAR_RECIPE' });
     setTimeout(() => navigate('/pantry'), 1800);
   };
@@ -233,7 +241,6 @@ export default function RecipePage() {
             {steps.map((step, i) => {
               const done = completedSteps.has(i);
               const timerVal = timers[i];
-              const isRunning = runningStep === i;
               return (
                 <div
                   key={i}

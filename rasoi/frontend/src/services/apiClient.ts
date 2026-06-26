@@ -19,6 +19,8 @@ import type {
   SubstitutionsResponse,
   HealthCheckResponse,
   PantryItemUpdateRequest,
+  PantryItemCreateRequest,
+  CookedResponse,
   SubstitutionRequest,
   ScanType
 } from '../types';
@@ -47,6 +49,15 @@ export class ApiError extends Error {
  */
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
 const REQUEST_TIMEOUT = 30000; // 30 seconds
+
+/**
+ * WebSocket base URL (derived from API base URL, strips /api suffix).
+ * Use this to build WebSocket endpoint URLs, e.g. `${WS_BASE_URL}/ws/chammach`.
+ */
+export const WS_BASE_URL = API_BASE_URL
+  .replace(/^https/, 'wss')
+  .replace(/^http/, 'ws')
+  .replace(/\/api$/, '');
 
 /**
  * Create configured Axios instance
@@ -214,6 +225,30 @@ const apiClient = {
       '/substitute',
       request
     );
+    return response.data;
+  },
+
+  /**
+   * Add a new item to the pantry manually.
+   *
+   * Endpoint: POST /api/pantry
+   */
+  addPantryItem: async (data: PantryItemCreateRequest): Promise<PantryItemResponse> => {
+    const response = await axiosInstance.post<PantryItemResponse>('/pantry', data);
+    return response.data;
+  },
+
+  /**
+   * Mark a recipe as cooked and remove used ingredients from the pantry.
+   *
+   * @param itemsUsed - Ingredient names to remove
+   *
+   * Endpoint: POST /api/pantry/cooked
+   */
+  markCooked: async (itemsUsed: string[]): Promise<CookedResponse> => {
+    const response = await axiosInstance.post<CookedResponse>('/pantry/cooked', {
+      items_used: itemsUsed,
+    });
     return response.data;
   },
 

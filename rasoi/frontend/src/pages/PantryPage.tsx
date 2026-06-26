@@ -101,18 +101,33 @@ export default function PantryPage() {
     }
   };
 
-  const handleAddItem = () => {
-    const newItem: PantryItem = {
-      id: `local-${Date.now()}`,
-      ...formData,
-      isExpiring: false,
-      isExpired: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    dispatch({ type: 'ADD_ITEMS', payload: [newItem] });
+  const handleAddItem = async () => {
+    if (!formData.name.trim()) return;
     setShowAddForm(false);
     setFormData(EMPTY_FORM);
+    try {
+      const res = await apiClient.addPantryItem({
+        name: formData.name,
+        quantity: formData.quantity,
+        unit: formData.unit,
+        acquisitionDate: formData.acquisitionDate,
+        expirationDate: formData.expirationDate,
+      });
+      dispatch({ type: 'ADD_ITEMS', payload: [res.item] });
+    } catch {
+      // Optimistic fallback — show the item locally if the API call fails
+      dispatch({
+        type: 'ADD_ITEMS',
+        payload: [{
+          id: `local-${Date.now()}`,
+          ...formData,
+          isExpiring: false,
+          isExpired: false,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        }],
+      });
+    }
   };
 
   const filterCounts = {
