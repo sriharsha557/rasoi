@@ -8,7 +8,7 @@
  *            4.6 (Match percentage)
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useRecipe } from '../context/RecipeContext';
 import { usePantry } from '../context/PantryContext';

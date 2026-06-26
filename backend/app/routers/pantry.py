@@ -1,6 +1,13 @@
 """
-Pantry router — GET/PUT/DELETE /api/pantry
+Pantry router — GET/POST/PUT/DELETE /api/pantry
 Full CRUD for pantry items with expiry flag computation.
+
+Endpoints:
+  GET    /api/pantry          — list all items
+  POST   /api/pantry          — add one item
+  PUT    /api/pantry/{id}     — update item
+  DELETE /api/pantry/{id}     — remove item
+  GET    /api/pantry/expiring — items expiring soon (amber) or expired (red)
 """
 
 from fastapi import APIRouter, HTTPException, Depends
@@ -32,9 +39,26 @@ def _attach_expiry_flags(item: dict) -> dict:
     return item
 
 
+class PantryItemCreateRequest(BaseModel):
+    name: str
+    quantity: float = 1.0
+    unit: str = "pcs"
+    acquisitionDate: Optional[str] = None   # ISO 8601; defaults to today
+    expirationDate: Optional[str] = None    # ISO 8601; defaults to today
+
+
 class PantryItemUpdateRequest(BaseModel):
     quantity: Optional[float] = None
     expirationDate: Optional[str] = None  # ISO 8601 string
+
+
+@router.get("/expiring")
+async def get_expiring(repo: PantryRepository = Depends(get_repository)):
+    """Return items that are expiring within 2 days or already expired."""
+    items = await repo.get_all()
+    flagged = [_attach_expiry_flags(i) for i in items]
+    expiring = [i for i in flagged if i.get("isExpiring") or i.get("isExpired")]
+    return {"items": expiring}
 
 
 @router.get("")
@@ -42,6 +66,23 @@ async def get_pantry(repo: PantryRepository = Depends(get_repository)):
     """Return all pantry items sorted by expiry date (soonest first)."""
     items = await repo.get_all()
     return {"items": [_attach_expiry_flags(i) for i in items]}
+
+
+@router.post("")
+async def add_pantry_item(
+    body: PantryItemCreateRequest,
+    repo: PantryRepository = Depends(get_repository),
+):
+    """Add a new item to the pantry."""
+    today = date.today().isoformat()
+    item = await repo.create({
+        "name": body.name.strip().lower(),
+        "quantity": body.quantity,
+        "unit": body.unit,
+        "acquisition_date": body.acquisitionDate or today,
+        "expiration_date": body.expirationDate or today,
+    })
+    return {"success": True, "item": _attach_expiry_flags(item)}
 
 
 @router.put("/{item_id}")

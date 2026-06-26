@@ -259,6 +259,30 @@ class PantryRepository:
             # Check if any rows were affected
             return cursor.rowcount > 0
 
+    async def delete_all(self) -> int:
+        """Delete every pantry item. Returns the number of rows removed."""
+        async with await self.db_connection.get_connection() as db:
+            cursor = await db.execute("DELETE FROM pantry_items")
+            await db.commit()
+            return cursor.rowcount
+
+    async def delete_by_names(self, names: list[str]) -> int:
+        """
+        Delete pantry items whose name matches any in the provided list
+        (case-insensitive). Returns the number of rows removed.
+        """
+        if not names:
+            return 0
+        lower_names = [n.lower() for n in names]
+        placeholders = ",".join("?" * len(lower_names))
+        async with await self.db_connection.get_connection() as db:
+            cursor = await db.execute(
+                f"DELETE FROM pantry_items WHERE lower(name) IN ({placeholders})",
+                lower_names,
+            )
+            await db.commit()
+            return cursor.rowcount
+
 
 # Singleton database connection instance
 _db_connection: Optional[DatabaseConnection] = None

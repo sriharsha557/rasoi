@@ -8,7 +8,7 @@
  *            6.3 (Step details), 6.4 (Persist step), 6.5 (Completion message)
  */
 
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRecipe } from '../context/RecipeContext';
 import apiClient, { ApiError } from '../services/apiClient';

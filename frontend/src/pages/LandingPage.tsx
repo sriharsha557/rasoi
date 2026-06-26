@@ -194,7 +194,7 @@ export default function LandingPage() {
 
         {/* Chammach */}
         <div
-          className="anim-g landing-float relative z-10 mt-6 cursor-pointer select-none"
+          className="anim-g landing-float relative z-10 mt-6 cursor-pointer select-none flex flex-col items-center"
           onClick={chammachTalk}
         >
           {/* Speech bubble */}
@@ -208,6 +208,14 @@ export default function LandingPage() {
 
           {/* Animated spoon */}
           <ChammachSpoon wiggling={isWiggling} mouthOpen={mouthOpen} />
+
+          {/* Introduction tag */}
+          <div className="mt-3 bg-white border border-rasoi/20 rounded-card shadow-card px-4 py-2.5 text-center max-w-[220px] mx-auto">
+            <p className="text-xs font-semibold text-rasoi leading-snug">Hi, I'm Chammach! 🥄</p>
+            <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
+              Your kitchen assistant — I'll guide you through every step.
+            </p>
+          </div>
         </div>
       </main>
 

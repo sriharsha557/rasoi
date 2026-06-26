@@ -11,7 +11,7 @@ from app.database import get_repository, PantryRepository
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
-ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png"}
+ALLOWED_CONTENT_TYPES = {"image/jpeg", "image/jpg", "image/png", "image/webp"}
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 
@@ -19,6 +19,7 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 async def scan_image(
     image: UploadFile = File(...),
     scanType: str = Form("ingredient"),
+    append: bool = Form(False),   # False = replace pantry, True = add to existing
     repo: PantryRepository = Depends(get_repository),
 ):
     """
@@ -26,7 +27,8 @@ async def scan_image(
 
     - Validates file type and size
     - Sends image to Claude Vision
-    - Saves extracted ingredients to the pantry database
+    - When append=False (default): clears pantry then saves extracted items
+    - When append=True: adds extracted items to existing pantry
     - Returns the saved pantry items
     """
     # Validate content type
@@ -64,6 +66,10 @@ async def scan_image(
             "ingredients": [],
             "message": "No ingredients detected in the image. Try a clearer photo.",
         }
+
+    # Replace or append pantry depending on the 'append' flag
+    if not append:
+        await repo.delete_all()
 
     # Save each ingredient to the pantry
     today = date.today().isoformat()
