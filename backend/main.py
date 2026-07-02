@@ -14,7 +14,7 @@ import json
 from datetime import datetime
 
 from app.database import get_database
-from app.routers import scan, pantry, recipes, substitutions
+from app.routers import scan, pantry, recipes, substitutions, planner
 from app.routers.chammach import router as chammach_router, run_agent_loop
 from app.guardrails import demo_preflight_check
 
@@ -158,6 +158,7 @@ app.include_router(scan.router)
 app.include_router(pantry.router)
 app.include_router(recipes.router)
 app.include_router(substitutions.router)
+app.include_router(planner.router)
 app.include_router(chammach_router)
 
 

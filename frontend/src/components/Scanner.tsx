@@ -48,6 +48,8 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  const [knowsExpiryDate, setKnowsExpiryDate] = useState(false);
+  const [knownExpiryDate, setKnownExpiryDate] = useState('');
 
   /**
    * Validate file type and size
@@ -97,6 +99,8 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
 
     // Set file and create preview
     setSelectedFile(file);
+    setKnowsExpiryDate(false);
+    setKnownExpiryDate('');
     const reader = new FileReader();
     reader.onloadend = () => {
       setPreviewUrl(reader.result as string);
@@ -170,7 +174,12 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
 
     try {
       // Call API to scan image
-      const response = await apiClient.scanImage(selectedFile, scanType);
+      const response = await apiClient.scanImage(
+        selectedFile,
+        scanType,
+        undefined,
+        knowsExpiryDate ? knownExpiryDate : undefined
+      );
 
       if (response.success && response.ingredients.length > 0) {
         // Convert ingredients to pantry items (backend assigns IDs)
@@ -180,7 +189,7 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
           quantity: ingredient.quantity,
           unit: ingredient.unit,
           acquisitionDate: ingredient.acquisitionDate,
-          expirationDate: ingredient.expirationDate,
+          expirationDate: knowsExpiryDate ? knownExpiryDate : ingredient.expirationDate,
           isExpiring: false, // Will be computed by backend
           isExpired: false,  // Will be computed by backend
           createdAt: new Date().toISOString(),
@@ -202,6 +211,8 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
           setSelectedFile(null);
           setPreviewUrl(null);
           setScanType('ingredient');
+          setKnowsExpiryDate(false);
+          setKnownExpiryDate('');
         }, 2000);
 
         // Call success callback
@@ -231,6 +242,8 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
     setPreviewUrl(null);
     setError(null);
     setSuccessMessage(null);
+    setKnowsExpiryDate(false);
+    setKnownExpiryDate('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -355,13 +368,63 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
           </div>
         )}
 
+        {/* Optional expiry date for the scanned list */}
+        {previewUrl && (
+          <div className="mb-6 rounded-card border border-rasoi/20 bg-rasoi-light p-4">
+            <p className="text-sm font-semibold text-rasoi-dark mb-3">
+              Do you know the expiry date for this list?
+            </p>
+            <div className="flex gap-2 mb-3">
+              <button
+                type="button"
+                onClick={() => setKnowsExpiryDate(true)}
+                disabled={isUploading}
+                className={`flex-1 rounded-pill px-4 py-2 text-sm font-semibold transition-colors ${
+                  knowsExpiryDate
+                    ? 'bg-rasoi text-white'
+                    : 'bg-white text-rasoi-dark border border-rasoi/20 hover:border-rasoi'
+                } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                Yes, I know it
+              </button>
+              <button
+                type="button"
+                onClick={() => { setKnowsExpiryDate(false); setKnownExpiryDate(''); }}
+                disabled={isUploading}
+                className={`flex-1 rounded-pill px-4 py-2 text-sm font-semibold transition-colors ${
+                  !knowsExpiryDate
+                    ? 'bg-rasoi text-white'
+                    : 'bg-white text-rasoi-dark border border-rasoi/20 hover:border-rasoi'
+                } ${isUploading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              >
+                Not sure
+              </button>
+            </div>
+            {knowsExpiryDate && (
+              <label className="block text-xs font-semibold text-rasoi-dark">
+                Expiry date
+                <input
+                  type="date"
+                  value={knownExpiryDate}
+                  onChange={(event) => setKnownExpiryDate(event.target.value)}
+                  disabled={isUploading}
+                  className="mt-1 w-full rounded-lg border border-rasoi/20 bg-white px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-rasoi/30"
+                />
+              </label>
+            )}
+            <p className="mt-2 text-xs text-rasoi-dark/70">
+              If you are not sure, RasOI will estimate expiry dates from the ingredient type.
+            </p>
+          </div>
+        )}
+
         {/* Upload Button */}
         {previewUrl && (
           <button
             onClick={handleUpload}
-            disabled={isUploading}
+            disabled={isUploading || (knowsExpiryDate && !knownExpiryDate)}
             className={`w-full py-3 px-6 rounded-pill font-semibold text-white transition-colors ${
-              isUploading
+              isUploading || (knowsExpiryDate && !knownExpiryDate)
                 ? 'bg-gray-400 cursor-not-allowed'
                 : 'bg-rasoi hover:bg-rasoi-dark'
             }`}
@@ -389,6 +452,8 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
                 </svg>
                 Scanning...
               </span>
+            ) : knowsExpiryDate && !knownExpiryDate ? (
+              'Choose expiry date to continue'
             ) : (
               `Scan ${scanType === 'ingredient' ? 'Ingredients' : 'Receipt'}`
             )}

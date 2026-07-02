@@ -22,7 +22,11 @@ import type {
   PantryItemCreateRequest,
   CookedResponse,
   SubstitutionRequest,
-  ScanType
+  ScanType,
+  WeeklyPlannerResponse,
+  CuisineProfilesResponse,
+  HouseholdProfile,
+  DeliveryPartnersResponse
 } from '../types';
 
 /**
@@ -129,11 +133,17 @@ const apiClient = {
    * 
    * Endpoint: POST /api/scan
    */
-  scanImage: async (imageFile: File, scanType: ScanType, userId?: string): Promise<ScanResponse> => {
+  scanImage: async (
+    imageFile: File,
+    scanType: ScanType,
+    userId?: string,
+    knownExpirationDate?: string
+  ): Promise<ScanResponse> => {
     const formData = new FormData();
     formData.append('image', imageFile);
     formData.append('scanType', scanType);
     if (userId) formData.append('userId', userId);
+    if (knownExpirationDate) formData.append('knownExpirationDate', knownExpirationDate);
 
     const response = await axiosInstance.post<ScanResponse>('/scan', formData, {
       headers: {
@@ -265,6 +275,60 @@ const apiClient = {
    */
   healthCheck: async (): Promise<HealthCheckResponse> => {
     const response = await axiosInstance.get<HealthCheckResponse>('/health');
+    return response.data;
+  },
+
+  /**
+   * Get a weekly meal plan with nutrition, household scaling, and grocery links.
+   *
+   * Endpoint: GET /api/planner/weekly
+   */
+  getWeeklyPlanner: async (
+    region: string = 'south_indian',
+    householdSize: number = 2,
+    days: number = 7
+  ): Promise<WeeklyPlannerResponse> => {
+    const response = await axiosInstance.get<WeeklyPlannerResponse>('/planner/weekly', {
+      params: {
+        region,
+        household_size: householdSize,
+        days,
+      },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get regional cuisine profiles.
+   *
+   * Endpoint: GET /api/cuisine-profiles
+   */
+  getCuisineProfiles: async (): Promise<CuisineProfilesResponse> => {
+    const response = await axiosInstance.get<CuisineProfilesResponse>('/cuisine-profiles');
+    return response.data;
+  },
+
+  /**
+   * Get the current household profile.
+   *
+   * Endpoint: GET /api/household/profile
+   */
+  getHouseholdProfile: async (): Promise<HouseholdProfile> => {
+    const response = await axiosInstance.get<HouseholdProfile>('/household/profile');
+    return response.data;
+  },
+
+  /**
+   * Get grocery delivery partner links for a list of items.
+   *
+   * Endpoint: GET /api/grocery/delivery-partners
+   */
+  getDeliveryPartners: async (items: string[] = []): Promise<DeliveryPartnersResponse> => {
+    const response = await axiosInstance.get<DeliveryPartnersResponse>('/grocery/delivery-partners', {
+      params: {
+        items: items.join(','),
+      },
+    });
     return response.data;
   },
 };

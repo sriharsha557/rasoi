@@ -10,6 +10,7 @@ import ScanPage from './pages/ScanPage';
 import PantryPage from './pages/PantryPage';
 import MealsPage from './pages/MealsPage';
 import RecipePage from './pages/RecipePage';
+import PlannerPage from './pages/PlannerPage';
 
 function App() {
   return (
@@ -24,6 +25,7 @@ function App() {
               <Route path="/scan" element={<ScanPage />} />
               <Route path="/pantry" element={<PantryPage />} />
               <Route path="/meals" element={<MealsPage />} />
+              <Route path="/planner" element={<PlannerPage />} />
               <Route path="/recipe" element={<RecipePage />} />
             </Routes>
             <Chammach />

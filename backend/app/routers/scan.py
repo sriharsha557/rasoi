@@ -27,6 +27,7 @@ async def scan_image(
     scanType: str = Form("ingredient"),
     append: bool = Form(False),   # False = replace pantry, True = add to existing
     userId: str = Form("guest"),  # Supabase Auth UID or "guest"
+    knownExpirationDate: Optional[str] = Form(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     repo: PantryRepository = Depends(get_repository),
 ):
@@ -47,6 +48,13 @@ async def scan_image(
     try:
         scanType = guardrails.sanitise_text_field(scanType, max_len=50, field_name="scanType")
         userId   = guardrails.sanitise_text_field(userId,   max_len=128, field_name="userId")
+        if knownExpirationDate:
+            knownExpirationDate = guardrails.sanitise_text_field(
+                knownExpirationDate,
+                max_len=10,
+                field_name="knownExpirationDate",
+            )
+            date.fromisoformat(knownExpirationDate)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     # Validate content type
@@ -134,7 +142,7 @@ async def scan_image(
                     "quantity": float(ing.get("quantity", 1)),
                     "unit": str(ing.get("unit", "pcs")),
                     "acquisition_date": str(ing.get("acquisition_date", today)),
-                    "expiration_date": str(ing.get("expiration_date", today)),
+                    "expiration_date": knownExpirationDate or str(ing.get("expiration_date", today)),
                 }
             )
             saved.append(item)

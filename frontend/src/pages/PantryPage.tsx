@@ -401,8 +401,9 @@ function AddForm({
         </div>
       </div>
       <div>
-        <label className="text-xs font-semibold text-gray-600 mb-1 block">Expiry date</label>
+        <label className="text-xs font-semibold text-gray-600 mb-1 block">Do you know the expiry date?</label>
         <input className={inputCls} type="date" value={formData.expirationDate} onChange={(e) => setFormData({ ...formData, expirationDate: e.target.value })} />
+        <p className="text-[11px] text-gray-400 mt-1">Leave blank and RasOI will estimate it.</p>
       </div>
       <div className="flex gap-2 pt-1">
         <button

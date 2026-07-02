@@ -181,3 +181,76 @@ export interface CookedResponse {
   remaining: number;
   message: string;
 }
+
+export interface CuisineProfile {
+  id: 'south_indian' | 'bengali' | 'punjabi' | string;
+  name: string;
+  staples: string[];
+  flavor_notes: string[];
+  preferred_meals: string[];
+}
+
+export interface HouseholdMember {
+  id: string;
+  name: string;
+  dietaryPreferences: string[];
+  servings: number;
+}
+
+export interface HouseholdProfile {
+  id: string;
+  name: string;
+  members: HouseholdMember[];
+  defaultServings: number;
+}
+
+export interface MealNutrition {
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+}
+
+export interface PlannedMealDay {
+  date: string;
+  mealName: string;
+  region: string;
+  servings: number;
+  usesPantryItems: string[];
+  missingIngredients: string[];
+  nutrition: MealNutrition;
+}
+
+export interface GroceryItem {
+  name: string;
+  quantity: number;
+  unit: string;
+}
+
+export interface DeliveryPartner {
+  id: 'blinkit' | 'zepto' | string;
+  name: string;
+  status: string;
+  cartUrl: string;
+}
+
+export interface WeeklyPlannerResponse {
+  profile: CuisineProfile;
+  household: HouseholdProfile;
+  days: PlannedMealDay[];
+  nutritionalSummary: {
+    dailyAverage: MealNutrition;
+    weeklyTotal: MealNutrition;
+  };
+  groceryList: GroceryItem[];
+  deliveryPartners: DeliveryPartner[];
+}
+
+export interface CuisineProfilesResponse {
+  profiles: CuisineProfile[];
+}
+
+export interface DeliveryPartnersResponse {
+  partners: DeliveryPartner[];
+}

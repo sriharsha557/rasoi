@@ -35,6 +35,12 @@ export default function Navbar() {
             </>
           )}
           <Link
+            to="/planner"
+            className="px-3 py-1.5 bg-rasoi hover:bg-rasoi-dark text-white text-sm font-semibold rounded-lg transition-colors flex items-center"
+          >
+            📅 Planner
+          </Link>
+          <Link
             to="/scan"
             className="ml-2 px-4 py-1.5 bg-rasoi hover:bg-rasoi-dark text-white text-sm font-semibold rounded-pill transition-colors"
           >
@@ -61,7 +67,7 @@ function NavLink({
       to={to}
       className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center ${
         isActive
-          ? 'bg-rasoi-light text-rasoi-dark'
+          ? 'bg-rasoi text-white shadow-sm'
           : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
       }`}
     >
