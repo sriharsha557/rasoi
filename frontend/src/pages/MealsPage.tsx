@@ -26,33 +26,26 @@ export default function MealsPage() {
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    fetchRecipes(prioritizeExpiry, cuisine);
-  }, []);
-
-  const fetchRecipes = (expFirst: boolean, cuisineFilter: Cuisine) => {
     dispatch({ type: 'SET_LOADING', payload: true });
     apiClient
-      .getRecipes(expFirst, 6, cuisineFilter === 'Quick' ? 'any' : cuisineFilter)
+      .getRecipes(prioritizeExpiry, 6, cuisine === 'Quick' ? 'any' : cuisine)
       .then((res) => {
         let filtered = res.recipes;
         // For Quick, filter client-side on prep time <= 20 min
-        if (cuisineFilter === 'Quick') {
+        if (cuisine === 'Quick') {
           filtered = filtered.filter((r) => r.prepTimeMinutes <= 20);
         }
         dispatch({ type: 'SET_RECIPES', payload: filtered });
       })
       .catch(() => dispatch({ type: 'SET_LOADING', payload: false }));
-  };
+  }, [dispatch, prioritizeExpiry, cuisine]);
 
   const handleToggle = () => {
-    const next = !prioritizeExpiry;
-    setPrioritizeExpiry(next);
-    fetchRecipes(next, cuisine);
+    setPrioritizeExpiry((current) => !current);
   };
 
   const handleCuisineChange = (c: Cuisine) => {
     setCuisine(c);
-    fetchRecipes(prioritizeExpiry, c);
   };
 
   const handleSelectRecipe = (recipe: Recipe) => {

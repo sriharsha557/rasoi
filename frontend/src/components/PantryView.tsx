@@ -29,6 +29,18 @@ export default function PantryView() {
   const [debounceTimer, setDebounceTimer] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   /**
+   * Sort items by expiration date (earliest first)
+   * Validates: Requirement 2.6
+   */
+  const sortByExpirationDate = (items: PantryItem[]): PantryItem[] => {
+    return [...items].sort((a, b) => {
+      const dateA = new Date(a.expirationDate).getTime();
+      const dateB = new Date(b.expirationDate).getTime();
+      return dateA - dateB;
+    });
+  };
+
+  /**
    * Fetch pantry items on component mount
    */
   useEffect(() => {
@@ -55,18 +67,6 @@ export default function PantryView() {
 
     fetchPantry();
   }, [dispatch]);
-
-  /**
-   * Sort items by expiration date (earliest first)
-   * Validates: Requirement 2.6
-   */
-  const sortByExpirationDate = (items: PantryItem[]): PantryItem[] => {
-    return [...items].sort((a, b) => {
-      const dateA = new Date(a.expirationDate).getTime();
-      const dateB = new Date(b.expirationDate).getTime();
-      return dateA - dateB;
-    });
-  };
 
   /**
    * Start editing an item's quantity

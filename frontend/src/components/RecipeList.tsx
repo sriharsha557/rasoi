@@ -57,7 +57,6 @@ export default function RecipeList() {
     if (pantryState.pantryItems.length > 0) {
       fetchRecipes();
     } else {
-      setIsLoading(false);
       recipeDispatch({ type: 'SET_LOADING', payload: false });
     }
   }, [recipeDispatch, pantryState.pantryItems.length]);

@@ -104,8 +104,12 @@ export default function Chammach() {
   }, []);
 
   useEffect(() => {
-    setVisible(true);
-    setMsgKey(k => k + 1);
+    const timer = setTimeout(() => {
+      setVisible(true);
+      setMsgKey(k => k + 1);
+    }, 0);
+
+    return () => clearTimeout(timer);
   }, [pathname, expiringCount]);
 
   useEffect(() => {

@@ -23,6 +23,21 @@ export default function LandingPage() {
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const dIdxRef = useRef(0);
 
+  const chammachTalk = () => {
+    dIdxRef.current = (dIdxRef.current + 1) % DIALOGUES.length;
+    setDialogue(DIALOGUES[dIdxRef.current]);
+    setSpeechVisible(true);
+    setIsWiggling(true);
+    setTimeout(() => setIsWiggling(false), 500);
+    let t = 0;
+    const interval = setInterval(() => {
+      t++;
+      setMouthOpen(t % 2 === 0);
+      if (t > 8) { clearInterval(interval); setMouthOpen(true); }
+    }, 140);
+    setTimeout(() => setSpeechVisible(false), 3200);
+  };
+
   // Scroll-in cards
   useEffect(() => {
     const obs = new IntersectionObserver(
@@ -51,21 +66,6 @@ export default function LandingPage() {
     const t = setTimeout(() => chammachTalk(), 2000);
     return () => clearTimeout(t);
   }, []);
-
-  const chammachTalk = () => {
-    dIdxRef.current = (dIdxRef.current + 1) % DIALOGUES.length;
-    setDialogue(DIALOGUES[dIdxRef.current]);
-    setSpeechVisible(true);
-    setIsWiggling(true);
-    setTimeout(() => setIsWiggling(false), 500);
-    let t = 0;
-    const interval = setInterval(() => {
-      t++;
-      setMouthOpen(t % 2 === 0);
-      if (t > 8) { clearInterval(interval); setMouthOpen(true); }
-    }, 140);
-    setTimeout(() => setSpeechVisible(false), 3200);
-  };
 
   const triggerScan = (type: string) => {
     setDialogue('Show me what you have!');

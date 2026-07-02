@@ -35,7 +35,7 @@ export default function PantryPage() {
         .then((res) => dispatch({ type: 'SET_ITEMS', payload: res.items }))
         .catch(() => dispatch({ type: 'SET_LOADING', payload: false }));
     }
-  }, []);
+  }, [dispatch, pantryItems.length]);
 
   const filtered = pantryItems.filter((item) => {
     if (filter === 'expired') return item.isExpired;

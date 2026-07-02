@@ -27,9 +27,13 @@ export default function RecipePage() {
       navigate('/meals');
       return;
     }
-    setTimers(Array(currentRecipe.steps.length).fill(null));
-    setCompletedSteps(new Set());
-  }, [currentRecipe]);
+    const timer = setTimeout(() => {
+      setTimers(Array(currentRecipe.steps.length).fill(null));
+      setCompletedSteps(new Set());
+    }, 0);
+
+    return () => clearTimeout(timer);
+  }, [currentRecipe, navigate]);
 
   // Countdown tick
   useEffect(() => {
