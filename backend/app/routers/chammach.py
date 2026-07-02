@@ -125,11 +125,25 @@ _TOOLS = [
         },
     },
     {
-        "name": "notify_user",
+        "name": "get_cook_history",
         "description": (
-            "Push a message to the user via Chammach. "
-            "This is always the FINAL tool call — call it once you have a clear recommendation."
+            "Retrieve the last 7 days of cooked meals to avoid recommending the same dish twice. "
+            "Call this when the trigger is recipe_cooked, idle, or morning_plan."
         ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "days": {
+                    "type": "integer",
+                    "description": "How many days of history to retrieve (default 7)",
+                    "default": 7,
+                }
+            },
+            "required": [],
+        },
+    },
+    {
+        "name": "notify_user",
         "input_schema": {
             "type": "object",
             "properties": {
@@ -162,15 +176,17 @@ Your job is to proactively help the user manage their kitchen:
 - Check what is expiring and alert them before food goes to waste
 - Recommend meals that use expiring ingredients first
 - Suggest substitutes when ingredients are missing
+- Avoid suggesting the same meal two days in a row
 - Be warm, concise, and helpful — speak like a friend, not a robot
 
 RULES:
 1. Always call check_expiry() first.
 2. If expiring items exist, call search_recipes() to find meals that use them.
-3. If a top recipe is missing an ingredient, call get_substitution().
-4. Always end with notify_user() — this is your only way to talk to the user.
-5. Maximum 4 tool calls per loop — be efficient.
-6. Keep dialogue under 2 sentences. Be specific: name the ingredient, name the dish.
+3. If the trigger is recipe_cooked or idle, call get_cook_history() to avoid repeating meals.
+4. If a top recipe is missing an ingredient, call get_substitution().
+5. Always end with notify_user() — this is your only way to talk to the user.
+6. Maximum 5 tool calls per loop — be efficient.
+7. Keep dialogue under 2 sentences. Be specific: name the ingredient, name the dish.
 """
 
 
@@ -238,6 +254,26 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> str:
             return json.dumps({"substitutions": subs})
         except Exception as exc:
             return json.dumps({"error": str(exc)})
+
+    elif tool_name == "get_cook_history":
+        days = int(tool_input.get("days", 7))
+        repo = await get_repository()
+        history = await repo.get_cook_history(days=days)
+        if not history:
+            return json.dumps({
+                "history": [],
+                "message": "No meals cooked in the last 7 days.",
+            })
+        return json.dumps({
+            "history": [
+                {
+                    "recipe_title": h["recipe_title"],
+                    "cooked_at": h["cooked_at"],
+                    "ingredients_used": h["ingredients_used"],
+                }
+                for h in history
+            ],
+        })
 
     elif tool_name == "notify_user":
         # Terminal tool — the caller extracts the event from tool_input

@@ -67,6 +67,21 @@ class DatabaseConnection:
                     WHERE id = OLD.id;
                 END
             """)
+
+            # cooked_history table — powers Chammach memory (PRD §6b.1)
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS cooked_history (
+                    id TEXT PRIMARY KEY,
+                    recipe_title TEXT NOT NULL,
+                    ingredients_used TEXT NOT NULL,  -- JSON array of names
+                    cooked_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_cooked_at
+                ON cooked_history(cooked_at DESC)
+            """)
             
             await db.commit()
     
@@ -282,6 +297,48 @@ class PantryRepository:
             )
             await db.commit()
             return cursor.rowcount
+
+    async def save_cook_history(self, recipe_title: str, ingredients_used: list[str]) -> None:
+        """Record a cooked meal in cooked_history for Chammach memory (PRD §6b.1)."""
+        import json as _json
+        record_id = str(uuid.uuid4())
+        cooked_at = datetime.utcnow().isoformat()
+        async with await self.db_connection.get_connection() as db:
+            await db.execute(
+                """
+                INSERT INTO cooked_history (id, recipe_title, ingredients_used, cooked_at)
+                VALUES (?, ?, ?, ?)
+                """,
+                (record_id, recipe_title, _json.dumps(ingredients_used), cooked_at),
+            )
+            await db.commit()
+
+    async def get_cook_history(self, days: int = 7) -> list[dict]:
+        """Return cooked meals from the last `days` days, newest first (PRD §8b.3)."""
+        import json as _json
+        from datetime import timedelta
+        since = (datetime.utcnow() - timedelta(days=days)).isoformat()
+        async with await self.db_connection.get_connection() as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT id, recipe_title, ingredients_used, cooked_at
+                FROM cooked_history
+                WHERE cooked_at >= ?
+                ORDER BY cooked_at DESC
+                """,
+                (since,),
+            )
+            rows = await cursor.fetchall()
+        result = []
+        for row in rows:
+            r = dict(row)
+            try:
+                r["ingredients_used"] = _json.loads(r["ingredients_used"])
+            except Exception:
+                r["ingredients_used"] = []
+            result.append(r)
+        return result
 
 
 # Singleton database connection instance

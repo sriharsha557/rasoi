@@ -37,6 +37,10 @@ async def _expiry_check_loop():
             if expiring:
                 logger.info("[expiry_loop] %d expiring item(s) — triggering Chammach", len(expiring))
                 await run_agent_loop("expiry_threshold_crossed")
+            # PRD §8b.4 — pantry drops below 5 items triggers low_stock alert
+            elif len(all_items) < 5 and len(all_items) > 0:
+                logger.info("[expiry_loop] Pantry below 5 items (%d) — triggering low_stock", len(all_items))
+                await run_agent_loop("pantry_low_stock")
         except Exception as exc:
             logger.warning("[expiry_loop] Error during check: %s", exc)
 

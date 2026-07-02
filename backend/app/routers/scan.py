@@ -3,7 +3,7 @@ Scan router — POST /api/scan
 Accepts an image upload, calls Claude Vision, saves results to pantry.
 """
 
-from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from datetime import date
 from typing import Optional
 from app.clients import claude_client
@@ -20,6 +20,7 @@ async def scan_image(
     image: UploadFile = File(...),
     scanType: str = Form("ingredient"),
     append: bool = Form(False),   # False = replace pantry, True = add to existing
+    background_tasks: BackgroundTasks = BackgroundTasks(),
     repo: PantryRepository = Depends(get_repository),
 ):
     """
@@ -100,6 +101,11 @@ async def scan_image(
         saved_with_meta.append(
             {**item, "confidence": match.get("confidence", 1.0) if match else 1.0}
         )
+
+    # Trigger Chammach agentic loop in background — PRD §8b.6 agentic moment #1
+    # "Auto-recommend on scan complete — no button click needed"
+    from app.routers.chammach import run_agent_loop
+    background_tasks.add_task(run_agent_loop, "pantry_scan_completed")
 
     return {
         "success": True,

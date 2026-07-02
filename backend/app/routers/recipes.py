@@ -10,8 +10,9 @@ Endpoints:
 """
 
 import os
+import asyncio
 import httpx
-from fastapi import APIRouter, HTTPException, Query, Depends
+from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks
 from pydantic import BaseModel
 from app.services.recipe_service import get_recipes, get_provider_status
 from app.routers.pantry import _attach_expiry_flags
@@ -22,12 +23,14 @@ router = APIRouter(prefix="/api", tags=["recipes"])
 
 class CookedRequest(BaseModel):
     items_used: list[str]   # ingredient names (not IDs) to remove from pantry
+    recipe_title: str = "Unknown Recipe"  # for cook history log
 
 
 @router.get("/recipes")
 async def recipes(
     prioritize_expiring: bool = Query(True, alias="prioritize_expiring"),
     max_recipes: int = Query(5, ge=1, le=10),
+    cuisine: str = Query("any"),
     repo: PantryRepository = Depends(get_repository),
 ):
     """
@@ -36,7 +39,7 @@ async def recipes(
     """
     raw_items = await repo.get_all()
     pantry = [_attach_expiry_flags(i) for i in raw_items]
-    result = await get_recipes(pantry, prioritize_expiring, max_recipes)
+    result = await get_recipes(pantry, prioritize_expiring, max_recipes, cuisine)
     return result
 
 
@@ -112,15 +115,22 @@ async def get_recipe_detail(recipe_id: str):
 @router.post("/pantry/cooked")
 async def mark_cooked(
     body: CookedRequest,
+    background_tasks: BackgroundTasks,
     repo: PantryRepository = Depends(get_repository),
 ):
     """
     Called when the user finishes cooking a recipe.
-    Removes the used ingredients from the pantry by name.
+    Removes the used ingredients from the pantry, saves cook history,
+    and triggers the Chammach agentic loop (PRD §8b.4).
     """
     removed = await repo.delete_by_names(body.items_used)
+    # Save to cook_history for Chammach memory (PRD §6b.1)
+    await repo.save_cook_history(body.recipe_title, body.items_used)
     all_items = await repo.get_all()
     remaining = len(all_items)
+    # Trigger Chammach agent loop in background (PRD §8b.4)
+    from app.routers.chammach import run_agent_loop
+    background_tasks.add_task(run_agent_loop, "recipe_cooked")
     return {
         "removed": removed,
         "remaining": remaining,

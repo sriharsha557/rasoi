@@ -199,12 +199,14 @@ const apiClient = {
    */
   getRecipes: async (
     prioritizeExpiring: boolean = true,
-    maxRecipes: number = 5
+    maxRecipes: number = 5,
+    cuisine: string = 'any'
   ): Promise<RecipesResponse> => {
     const response = await axiosInstance.get<RecipesResponse>('/recipes', {
       params: {
         prioritize_expiring: prioritizeExpiring,
         max_recipes: maxRecipes,
+        cuisine,
       },
     });
     return response.data;
@@ -245,9 +247,10 @@ const apiClient = {
    *
    * Endpoint: POST /api/pantry/cooked
    */
-  markCooked: async (itemsUsed: string[]): Promise<CookedResponse> => {
+  markCooked: async (itemsUsed: string[], recipeTitle: string = 'Unknown Recipe'): Promise<CookedResponse> => {
     const response = await axiosInstance.post<CookedResponse>('/pantry/cooked', {
       items_used: itemsUsed,
+      recipe_title: recipeTitle,
     });
     return response.data;
   },

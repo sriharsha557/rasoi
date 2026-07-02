@@ -189,6 +189,7 @@ async def get_recipes(
     pantry_items: list[dict],
     prioritize_expiring: bool = True,
     max_recipes: int = 5,
+    cuisine: str = "any",
 ) -> dict:
     """
     Get recipe recommendations with 3-tier auto-failover.
@@ -210,9 +211,9 @@ async def get_recipes(
         if recipes:
             return {"recipes": _mark_expiring(recipes, pantry_items), "provider": "edamam"}
 
-    # Tier 3: Claude (always available)
+    # Tier 3: Claude (always available) — passes cuisine hint
     recipes = await claude_client.get_recipe_recommendations(
-        pantry_items, prioritize_expiring, max_recipes
+        pantry_items, prioritize_expiring, max_recipes, cuisine
     )
     return {"recipes": _mark_expiring(recipes, pantry_items), "provider": "claude"}
 

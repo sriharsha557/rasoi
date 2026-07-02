@@ -60,7 +60,7 @@ export default function RecipePage() {
       .map((ing) => ing.name);
     setMarkedCooked(true);
     try {
-      await apiClient.markCooked(usedNames);
+      await apiClient.markCooked(usedNames, currentRecipe.name);
       // Optimistically remove used items from pantry context
       usedNames.forEach((name) => {
         const item = pantryState.pantryItems.find(

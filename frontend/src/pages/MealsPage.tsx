@@ -5,31 +5,54 @@ import { useRecipe } from '../context/RecipeContext';
 import apiClient from '../services/apiClient';
 import type { Recipe } from '../types';
 
+type Cuisine = 'any' | 'Indian' | 'Italian' | 'Mexican' | 'Quick';
+
+const CUISINE_CHIPS: { label: string; value: Cuisine; emoji: string }[] = [
+  { label: 'All', value: 'any', emoji: '🍽️' },
+  { label: 'Indian', value: 'Indian', emoji: '🍛' },
+  { label: 'Italian', value: 'Italian', emoji: '🍝' },
+  { label: 'Mexican', value: 'Mexican', emoji: '🌮' },
+  { label: 'Quick (<20 min)', value: 'Quick', emoji: '⚡' },
+];
+
 export default function MealsPage() {
   const navigate = useNavigate();
   const { state: pantryState } = usePantry();
   const { state: recipeState, dispatch } = useRecipe();
   const [prioritizeExpiry, setPrioritizeExpiry] = useState(true);
+  const [cuisine, setCuisine] = useState<Cuisine>('any');
 
   const { recipes, isLoading } = recipeState;
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    fetchRecipes(prioritizeExpiry);
+    fetchRecipes(prioritizeExpiry, cuisine);
   }, []);
 
-  const fetchRecipes = (expFirst: boolean) => {
+  const fetchRecipes = (expFirst: boolean, cuisineFilter: Cuisine) => {
     dispatch({ type: 'SET_LOADING', payload: true });
     apiClient
-      .getRecipes(expFirst, 6)
-      .then((res) => dispatch({ type: 'SET_RECIPES', payload: res.recipes }))
+      .getRecipes(expFirst, 6, cuisineFilter === 'Quick' ? 'any' : cuisineFilter)
+      .then((res) => {
+        let filtered = res.recipes;
+        // For Quick, filter client-side on prep time <= 20 min
+        if (cuisineFilter === 'Quick') {
+          filtered = filtered.filter((r) => r.prepTimeMinutes <= 20);
+        }
+        dispatch({ type: 'SET_RECIPES', payload: filtered });
+      })
       .catch(() => dispatch({ type: 'SET_LOADING', payload: false }));
   };
 
   const handleToggle = () => {
     const next = !prioritizeExpiry;
     setPrioritizeExpiry(next);
-    fetchRecipes(next);
+    fetchRecipes(next, cuisine);
+  };
+
+  const handleCuisineChange = (c: Cuisine) => {
+    setCuisine(c);
+    fetchRecipes(prioritizeExpiry, c);
   };
 
   const handleSelectRecipe = (recipe: Recipe) => {
@@ -67,6 +90,23 @@ export default function MealsPage() {
               <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${prioritizeExpiry ? 'left-5' : 'left-0.5'}`} />
             </div>
           </label>
+        </div>
+
+        {/* Cuisine filter chips — PRD §6c.1 */}
+        <div className="flex flex-wrap gap-2 mb-6">
+          {CUISINE_CHIPS.map((chip) => (
+            <button
+              key={chip.value}
+              onClick={() => handleCuisineChange(chip.value)}
+              className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-sm font-semibold transition-all ${
+                cuisine === chip.value
+                  ? 'bg-rasoi text-white shadow-sm'
+                  : 'bg-white border border-gray-200 text-gray-600 hover:border-rasoi hover:text-rasoi'
+              }`}
+            >
+              {chip.emoji} {chip.label}
+            </button>
+          ))}
         </div>
 
         {/* Loading skeletons */}
