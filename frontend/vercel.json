@@ -1,4 +1,7 @@
 {
+  "env": {
+    "VITE_API_BASE_URL": "https://rasoi-backend-ml4i.onrender.com/api"
+  },
   "rewrites": [
     { "source": "/(.*)", "destination": "/index.html" }
   ]

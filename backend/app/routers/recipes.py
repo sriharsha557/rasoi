@@ -114,6 +114,78 @@ async def provider_status():
     return get_provider_status()
 
 
+@router.get("/recipe/search")
+async def search_recipe_detail(query: str = Query(..., min_length=2, max_length=120)):
+    """
+    Search Spoonacular by meal name and return the first full recipe detail.
+    Used by planner cards so a planned meal opens a real recipe from the API.
+    """
+    spoonacular_key = os.getenv("SPOONACULAR_API_KEY")
+    if not spoonacular_key:
+        raise HTTPException(status_code=404, detail="Spoonacular recipe search is not configured.")
+
+    async with httpx.AsyncClient(timeout=10) as client:
+        search_resp = await client.get(
+            "https://api.spoonacular.com/recipes/complexSearch",
+            params={
+                "apiKey": spoonacular_key,
+                "query": query,
+                "number": 1,
+                "addRecipeInformation": False,
+            },
+        )
+
+        if search_resp.status_code == 402:
+            raise HTTPException(status_code=502, detail="Spoonacular quota exhausted.")
+        if search_resp.status_code != 200:
+            raise HTTPException(status_code=502, detail=f"Spoonacular search error {search_resp.status_code}.")
+
+        results = search_resp.json().get("results", [])
+        if not results:
+            raise HTTPException(status_code=404, detail="Recipe not found.")
+
+        recipe_id = results[0]["id"]
+        detail_resp = await client.get(
+            f"https://api.spoonacular.com/recipes/{recipe_id}/information",
+            params={"apiKey": spoonacular_key, "includeNutrition": False},
+        )
+
+    if detail_resp.status_code == 404:
+        raise HTTPException(status_code=404, detail="Recipe not found.")
+    if detail_resp.status_code != 200:
+        raise HTTPException(status_code=502, detail=f"Spoonacular error {detail_resp.status_code}.")
+
+    data = detail_resp.json()
+    steps = [
+        step["step"]
+        for inst in data.get("analyzedInstructions", [])
+        for step in inst.get("steps", [])
+    ]
+    ingredients = [
+        {"name": i.get("name", ""), "quantity": i.get("amount", 1), "unit": i.get("unit", "pcs"), "available": True}
+        for i in data.get("extendedIngredients", [])
+    ]
+    return {
+        "success": True,
+        "provider": "spoonacular",
+        "recipes": [
+            {
+                "id": str(data["id"]),
+                "name": data["title"],
+                "cuisine": (data.get("cuisines") or [""])[0],
+                "difficulty": "Medium",
+                "prepTimeMinutes": data.get("readyInMinutes", 30),
+                "matchPercentage": 100,
+                "usesExpiringItems": False,
+                "ingredients": ingredients,
+                "missingIngredients": [],
+                "steps": steps or ["Open the source recipe for detailed cooking steps."],
+            }
+        ],
+        "message": "Recipe loaded from Spoonacular.",
+    }
+
+
 @router.get("/recipe/{recipe_id}")
 async def get_recipe_detail(recipe_id: str):
     """

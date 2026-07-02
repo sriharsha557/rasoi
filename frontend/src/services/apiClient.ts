@@ -51,7 +51,11 @@ export class ApiError extends Error {
 /**
  * API Client Configuration
  */
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || (
+  import.meta.env.PROD
+    ? 'https://rasoi-backend-ml4i.onrender.com/api'
+    : 'http://localhost:8000/api'
+);
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 /**
@@ -219,6 +223,18 @@ const apiClient = {
         max_recipes: maxRecipes,
         cuisine,
       },
+    });
+    return response.data;
+  },
+
+  /**
+   * Search Spoonacular for a recipe by meal name and return full recipe details.
+   *
+   * Endpoint: GET /api/recipe/search
+   */
+  getRecipeByName: async (query: string): Promise<RecipesResponse> => {
+    const response = await axiosInstance.get<RecipesResponse>('/recipe/search', {
+      params: { query },
     });
     return response.data;
   },

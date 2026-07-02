@@ -1,4 +1,6 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { useRecipe } from '../context/RecipeContext';
 import apiClient from '../services/apiClient';
 import type { CuisineProfile, WeeklyPlannerResponse } from '../types';
 
@@ -9,12 +11,15 @@ const REGION_LABELS: Record<string, string> = {
 };
 
 export default function PlannerPage() {
+  const navigate = useNavigate();
+  const { dispatch } = useRecipe();
   const [region, setRegion] = useState('south_indian');
   const [householdSize, setHouseholdSize] = useState(2);
   const [profiles, setProfiles] = useState<CuisineProfile[]>([]);
   const [planner, setPlanner] = useState<WeeklyPlannerResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadingMealName, setLoadingMealName] = useState<string | null>(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
@@ -33,6 +38,25 @@ export default function PlannerPage() {
 
   const summary = planner?.nutritionalSummary.dailyAverage;
   const groceryItems = planner?.groceryList ?? [];
+
+  const handleMealClick = async (mealName: string) => {
+    setLoadingMealName(mealName);
+    setError(null);
+    try {
+      const response = await apiClient.getRecipeByName(mealName);
+      const recipe = response.recipes[0];
+      if (!recipe) {
+        setError('Recipe was not found in Spoonacular.');
+        return;
+      }
+      dispatch({ type: 'SELECT_RECIPE', payload: recipe });
+      navigate('/recipe');
+    } catch {
+      setError('Could not load this recipe from Spoonacular. Check the backend API key and quota.');
+    } finally {
+      setLoadingMealName(null);
+    }
+  };
 
   return (
     <main className="min-h-screen bg-rasoi-light pt-20 pb-12 px-4">
@@ -99,7 +123,13 @@ export default function PlannerPage() {
             ) : (
               <div className="grid gap-3">
                 {planner?.days.map((day) => (
-                  <article key={day.date} className="border border-gray-100 rounded-card p-4 hover:border-rasoi-light transition-colors">
+                  <button
+                    key={day.date}
+                    type="button"
+                    onClick={() => handleMealClick(day.mealName)}
+                    disabled={loadingMealName === day.mealName}
+                    className="w-full text-left border border-gray-100 rounded-card p-4 hover:border-rasoi hover:shadow-card-hover transition-all disabled:opacity-70 disabled:cursor-wait"
+                  >
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
                       <div>
                         <p className="text-xs font-bold uppercase tracking-widest text-gray-400">
@@ -108,7 +138,7 @@ export default function PlannerPage() {
                         <h3 className="text-lg font-extrabold text-gray-900 mt-1">{day.mealName}</h3>
                       </div>
                       <span className="text-xs font-bold text-gray-600 bg-gray-100 rounded-full px-2.5 py-1 w-fit">
-                        {day.servings} servings
+                        {loadingMealName === day.mealName ? 'Loading recipe...' : `${day.servings} servings`}
                       </span>
                     </div>
                     <div className="mt-3 flex flex-wrap gap-2 text-xs">
@@ -127,7 +157,7 @@ export default function PlannerPage() {
                         </span>
                       )}
                     </div>
-                  </article>
+                  </button>
                 ))}
               </div>
             )}
