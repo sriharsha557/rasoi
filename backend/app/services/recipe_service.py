@@ -10,6 +10,7 @@ import json
 import logging
 from datetime import date
 from app.clients import claude_client
+from app import guardrails
 
 logger = logging.getLogger(__name__)
 
@@ -230,6 +231,8 @@ def _mark_expiring(recipes: list[dict], pantry_items: list[dict]) -> list[dict]:
             ing["name"].lower() for ing in recipe.get("ingredients", [])
         }
         recipe["usesExpiringItems"] = bool(recipe_ingredient_names & expiring_names)
+    # 14.2: Remove recipes that only use fully-expired ingredients
+    recipes = guardrails.filter_expired_only_recipes(recipes, pantry_items)
     # Sort: expiring-first, then by matchPercentage desc
     recipes.sort(key=lambda r: (-r["usesExpiringItems"], -r.get("matchPercentage", 0)))
     return recipes

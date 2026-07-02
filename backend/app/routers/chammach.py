@@ -22,6 +22,7 @@ from app.database import get_repository
 from app.routers.pantry import _attach_expiry_flags
 from app.services.recipe_service import get_recipes
 from app.clients import claude_client as _claude_client
+from app import guardrails
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chammach"])
@@ -179,14 +180,21 @@ Your job is to proactively help the user manage their kitchen:
 - Avoid suggesting the same meal two days in a row
 - Be warm, concise, and helpful — speak like a friend, not a robot
 
-RULES:
+AGENTIC RULES (mandatory — PRD §14.3):
+1. READ-ONLY: You only read data and make recommendations. Never delete or modify pantry items.
+2. NO IRREVERSIBLE ACTIONS: Never place orders, send messages, or modify external systems.
+3. TOOL BUDGET: Maximum 5 tool calls per response. Be efficient — combine insights.
+4. NO EXTERNAL ORDERS: You cannot call shopping, delivery, or payment APIs.
+5. GRACEFUL DEGRADATION: If a tool returns an error, continue with what you know.
+6. AUDIT TRAIL: Be specific — name the ingredient, name the dish, explain the expiry.
+7. TRANSPARENCY: Your notify_user message must explain what you found and why you recommend it.
+
+WORKFLOW:
 1. Always call check_expiry() first.
 2. If expiring items exist, call search_recipes() to find meals that use them.
 3. If the trigger is recipe_cooked or idle, call get_cook_history() to avoid repeating meals.
 4. If a top recipe is missing an ingredient, call get_substitution().
 5. Always end with notify_user() — this is your only way to talk to the user.
-6. Maximum 5 tool calls per loop — be efficient.
-7. Keep dialogue under 2 sentences. Be specific: name the ingredient, name the dish.
 """
 
 
@@ -289,6 +297,12 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
     One iteration of Chammach's Observe-Think-Plan-Act loop.
     Claude decides which tools to call and in what order.
     Terminates when Claude calls notify_user() or after 5 iterations.
+
+    Enforces PRD §14.3 agentic guardrails:
+      - Rule 3: tool budget (max 5 calls)
+      - Rule 5: graceful degradation on tool errors
+      - Rule 6: audit log per tool call
+      - Rule 7: transparency via validate_chammach_dialogue()
     """
     logger.info("[chammach] Agent loop triggered by: %s", trigger)
 
@@ -321,9 +335,34 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
         messages.append({"role": "assistant", "content": response.content})
 
         tool_results = []
+        tool_call_index = 0
         for tool_call in tool_calls:
-            logger.info("[chammach] Tool call: %s %s", tool_call.name, tool_call.input)
-            result = await _execute_tool(tool_call.name, tool_call.input)
+            tool_call_index += 1
+
+            # Rule 1/2/4: Block disallowed tools before execution
+            allowed, rejection_reason = guardrails.validate_agent_tool_call(
+                tool_call.name, tool_call.input
+            )
+            if not allowed:
+                logger.warning("[chammach-14.3] Blocked tool call: %s — %s", tool_call.name, rejection_reason)
+                result = json.dumps({"error": rejection_reason})
+            else:
+                # Rule 5: Graceful degradation — tool errors don't abort the loop
+                try:
+                    result = await _execute_tool(tool_call.name, tool_call.input)
+                except Exception as tool_exc:
+                    logger.warning("[chammach-14.3] Tool %s failed: %s", tool_call.name, tool_exc)
+                    result = json.dumps({"error": f"Tool temporarily unavailable: {tool_exc}"})
+
+            # Rule 6: Audit log every call
+            guardrails.log_agent_tool_call(
+                trigger=trigger,
+                tool_name=tool_call.name,
+                tool_input=tool_call.input,
+                result_summary=result[:120],
+                call_index=tool_call_index,
+            )
+
             tool_results.append({
                 "type": "tool_result",
                 "tool_use_id": tool_call.id,
@@ -331,9 +370,11 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
             })
             if tool_call.name == "notify_user":
                 inp = tool_call.input
+                # Rule 7: Transparency — validate and sanitise dialogue
+                dialogue = guardrails.validate_chammach_dialogue(inp.get("dialogue", ""))
                 final_event = ChammachEvent(
                     type=inp.get("event_type", "idle"),
-                    dialogue=inp.get("dialogue", ""),
+                    dialogue=dialogue,
                     animation=inp.get("animation", "bounce"),
                     data=inp.get("data"),
                 )

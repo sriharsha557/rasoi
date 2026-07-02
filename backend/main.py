@@ -12,6 +12,7 @@ import logging
 from app.database import get_database
 from app.routers import scan, pantry, recipes, substitutions
 from app.routers.chammach import router as chammach_router, run_agent_loop
+from app.guardrails import demo_preflight_check
 
 load_dotenv()
 
@@ -110,6 +111,17 @@ async def health_check():
             "edamam": "configured" if edamam_configured else "not_configured",
         },
     }
+
+
+@app.get("/api/safety/demo-check")
+async def demo_safety_check():
+    """
+    PRD §14.4 — Demo Day Safety pre-flight check.
+    Run this before going on stage to verify all 5 failure scenarios are covered.
+
+    Returns overall: 'ok' | 'warn' | 'fail' and per-check details.
+    """
+    return await demo_preflight_check()
 
 
 if __name__ == "__main__":

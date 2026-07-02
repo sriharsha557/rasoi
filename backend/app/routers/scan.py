@@ -13,6 +13,7 @@ from typing import Optional
 from app.clients import claude_client
 from app.clients import supabase_client
 from app.database import get_repository, PantryRepository
+from app import guardrails
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
 
@@ -33,13 +34,21 @@ async def scan_image(
     Scan an ingredient photo or grocery receipt.
 
     - Validates file type and size
+    - Checks form fields for prompt injection (PRD §14.1)
     - Uploads image to Supabase Storage (best-effort — scan continues if Supabase is not configured)
     - Records scan in pantry_scans table
     - Sends image to Claude Vision for ingredient extraction
+    - Validates Claude output for non-food images and injection in results (PRD §14.1)
     - When append=False (default): clears pantry then saves extracted items
     - When append=True: adds extracted items to existing pantry
     - Returns the saved pantry items plus the Supabase image URL
     """
+    # ── 14.1: Prompt injection check on form inputs ──────────────────────────
+    try:
+        scanType = guardrails.sanitise_text_field(scanType, max_len=50, field_name="scanType")
+        userId   = guardrails.sanitise_text_field(userId,   max_len=128, field_name="userId")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
     # Validate content type
     if image.content_type not in ALLOWED_CONTENT_TYPES:
         raise HTTPException(
@@ -99,6 +108,15 @@ async def scan_image(
             "success": False,
             "ingredients": [],
             "message": "No ingredients detected in the image. Try a clearer photo.",
+        }
+
+    # ── 14.1: Validate scan output (non-food image + injection in Claude output)
+    is_valid, reason = guardrails.validate_food_scan_result(raw_ingredients)
+    if not is_valid:
+        return {
+            "success": False,
+            "ingredients": [],
+            "message": reason,
         }
 
     # Replace or append pantry depending on the 'append' flag
