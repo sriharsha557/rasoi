@@ -1,8 +1,10 @@
 """
 Pantry Service — Inventory management operations.
 
-Provides high-level pantry operations: adding items, updating quantities,
+Provides high-level async pantry operations: adding items, updating quantities,
 deleting items, filtering by expiration status, and sorting.
+
+Async-first implementation with proper error handling and logging.
 
 Validates: Requirements 2.2, 2.3, 2.4, 2.5, 2.6, 3.1, 3.4, 3.5
 """
@@ -19,7 +21,8 @@ class PantryService:
     """
     Service for pantry inventory management.
     
-    Provides CRUD operations, expiration detection, sorting, and filtering.
+    Provides async CRUD operations, expiration detection, sorting, and filtering.
+    Uses async-first patterns throughout for event loop compatibility.
     """
     
     def __init__(self, repository: PantryRepository):
@@ -30,6 +33,7 @@ class PantryService:
             repository: PantryRepository instance for data access
         """
         self.repository = repository
+        logger.debug("[pantry_service] Initialized with repository")
     
     @staticmethod
     def _attach_expiry_flags(item: Dict[str, Any]) -> Dict[str, Any]:

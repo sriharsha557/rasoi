@@ -1,5 +1,5 @@
 # Root gitignore for RasOI monorepo
-
+# Cghackthon@2026
 # Environment variables
 .env
 .env.local

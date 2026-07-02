@@ -1,13 +1,17 @@
 """
 RasOI Backend - FastAPI Application Entry Point
 """
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 import asyncio
 import os
 import logging
+import json
+from datetime import datetime
 
 from app.database import get_database
 from app.routers import scan, pantry, recipes, substitutions
@@ -76,6 +80,78 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ── Error Handlers ───────────────────────────────────────────────────────────
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Handle Pydantic validation errors (422).
+    
+    Returns detailed validation error information for client debugging.
+    """
+    logger.warning(
+        "[error_handler] Validation error for %s %s: %s",
+        request.method,
+        request.url.path,
+        str(exc.errors())
+    )
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={
+            "status": "error",
+            "code": "validation_error",
+            "message": "Request validation failed",
+            "details": exc.errors(),
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def general_exception_handler(request: Request, exc: Exception):
+    """
+    Handle unexpected server errors (500).
+    
+    Logs the full error traceback and returns a generic error response.
+    """
+    logger.error(
+        "[error_handler] Unhandled exception for %s %s: %s",
+        request.method,
+        request.url.path,
+        str(exc),
+        exc_info=True
+    )
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "status": "error",
+            "code": "internal_error",
+            "message": "An unexpected error occurred. Please try again later.",
+        },
+    )
+
+
+@app.exception_handler(ValueError)
+async def value_error_handler(request: Request, exc: ValueError):
+    """
+    Handle ValueError as 400 Bad Request.
+    
+    Indicates client provided invalid data that doesn't match validation.
+    """
+    logger.warning(
+        "[error_handler] Value error for %s %s: %s",
+        request.method,
+        request.url.path,
+        str(exc)
+    )
+    return JSONResponse(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        content={
+            "status": "error",
+            "code": "bad_request",
+            "message": str(exc) or "Invalid request parameters",
+        },
+    )
 
 # ── Routers ──────────────────────────────────────────────────────────────────
 app.include_router(scan.router)

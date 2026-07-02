@@ -101,14 +101,15 @@ class DatabaseConnection:
             
             await db.commit()
     
-    async def get_connection(self) -> aiosqlite.Connection:
+    async def get_connection(self):
         """
-        Get a database connection.
+        Get a database connection context manager.
         
         Returns:
-            An aiosqlite connection instance
+            An aiosqlite connection instance (must be used with async context manager)
         """
-        return await aiosqlite.connect(self.db_path)
+        # Return a fresh connection each time - aiosqlite handles the lifecycle
+        return aiosqlite.connect(self.db_path)
 
 
 class PantryRepository:

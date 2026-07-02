@@ -2,14 +2,16 @@
 Scanner Service — Image processing and ingredient extraction coordination.
 
 Coordinates image validation, Claude Vision API calls, parsing, and enrichment
-with expiration date estimation.
+with expiration date estimation. Async-first implementation with proper error handling.
 
 Validates: Requirements 1.1, 1.2, 1.3, 1.4, 1.5
 """
 
 from datetime import date, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from app.clients import claude_client
+from app.database import PantryRepository
+from app.utils.ingredient_parser import IngredientParser, IngredientParseError
 import logging
 
 logger = logging.getLogger(__name__)
@@ -77,14 +79,55 @@ INGREDIENT_SHELF_LIFE = {
 # Default shelf life for unknown items (in days)
 DEFAULT_SHELF_LIFE_DAYS = 7
 
+# Image validation constants
+MAX_IMAGE_SIZE_MB = 5
+SUPPORTED_FORMATS = {"image/jpeg", "image/png", "image/webp"}
+
 
 class ScannerService:
     """
     Service for processing ingredient scans and enriching ingredient data.
+    
+    Provides async-first methods for image validation, Vision API coordination,
+    parsing, and storage of extracted ingredients.
     """
     
+    def __init__(self, repository: PantryRepository):
+        """
+        Initialize scanner service.
+        
+        Args:
+            repository: PantryRepository instance for storing ingredients
+        """
+        self.repository = repository
+    
     @staticmethod
-    def estimate_expiration(ingredient_name: str, acquisition_date: date = None) -> date:
+    def _validate_image(image_bytes: bytes, media_type: str) -> tuple[bool, str]:
+        """
+        Validate image format and size.
+        
+        Args:
+            image_bytes: Raw image data
+            media_type: MIME type of the image
+        
+        Returns:
+            Tuple of (is_valid, error_message)
+        
+        Validates: Requirement 1.2
+        """
+        if not image_bytes:
+            return False, "Image is empty"
+        
+        if len(image_bytes) > MAX_IMAGE_SIZE_MB * 1024 * 1024:
+            return False, f"Image exceeds {MAX_IMAGE_SIZE_MB}MB limit"
+        
+        if media_type not in SUPPORTED_FORMATS:
+            return False, f"Unsupported format. Supported: {', '.join(SUPPORTED_FORMATS)}"
+        
+        return True, ""
+    
+    @staticmethod
+    def estimate_expiration(ingredient_name: str, acquisition_date: Optional[date] = None) -> date:
         """
         Estimate expiration date based on ingredient category.
         
@@ -121,62 +164,71 @@ class ScannerService:
         expiration_date = acquisition_date + timedelta(days=days)
         return expiration_date
     
-    @staticmethod
     async def scan_image(
+        self,
         image_bytes: bytes,
         scan_type: str,
         media_type: str = "image/jpeg"
     ) -> Dict[str, Any]:
         """
-        Process image scan and extract ingredients.
+        Process image scan and extract ingredients with storage.
         
-        Coordinates Vision API call, parsing, and enrichment with expiration estimates.
+        Coordinates:
+        1. Image validation
+        2. Vision API call (via claude_client.extract_ingredients)
+        3. Response parsing using IngredientParser
+        4. Expiration enrichment
+        5. Storage in PantryRepository
         
         Args:
             image_bytes: Raw image file bytes
             scan_type: Type of scan ("ingredient" or "receipt")
-            media_type: MIME type of the image
+            media_type: MIME type of the image (default: "image/jpeg")
         
         Returns:
             Dictionary with:
             - success (bool): Whether scan was successful
-            - ingredients (List[Dict]): Extracted and enriched ingredient data
+            - ingredients (List[Dict]): Extracted and stored ingredient data with IDs
             - message (str): Result message
             - raw_count (int): Number of raw ingredients detected
-        
-        Raises:
-            ValueError: If image is empty or invalid
-            RuntimeError: If Claude Vision API fails
+            - stored_count (int): Number of ingredients successfully stored
         
         Validates: Requirements 1.1, 1.2, 1.4, 1.5
         """
-        if not image_bytes:
+        # Validate image
+        is_valid, error_msg = self._validate_image(image_bytes, media_type)
+        if not is_valid:
+            logger.warning("[scanner_service] Image validation failed: %s", error_msg)
             return {
                 "success": False,
                 "ingredients": [],
-                "message": "Image is empty",
+                "message": error_msg,
                 "raw_count": 0,
+                "stored_count": 0,
             }
         
         logger.info(
-            "[scanner_service] Processing %s scan (%d bytes)",
+            "[scanner_service] Processing %s scan (%d bytes, %s)",
             scan_type,
-            len(image_bytes)
+            len(image_bytes),
+            media_type
         )
         
         try:
-            # Call Claude Vision API
+            # Call Claude Vision API via claude_client
             raw_ingredients = await claude_client.extract_ingredients(
                 image_bytes=image_bytes,
                 media_type=media_type
             )
             
             if not raw_ingredients:
+                logger.info("[scanner_service] No ingredients detected in image")
                 return {
                     "success": False,
                     "ingredients": [],
                     "message": "No ingredients detected in the image. Try a clearer photo.",
                     "raw_count": 0,
+                    "stored_count": 0,
                 }
             
             logger.info(
@@ -184,8 +236,8 @@ class ScannerService:
                 len(raw_ingredients)
             )
             
-            # Enrich ingredients with expiration estimates
-            enriched = []
+            # Enrich ingredients with expiration estimates and store
+            enriched_and_stored = []
             for ingredient in raw_ingredients:
                 try:
                     acquisition_date = date.fromisoformat(
@@ -195,9 +247,15 @@ class ScannerService:
                     # Estimate expiration if not provided
                     expiration_date_str = ingredient.get("expiration_date")
                     if expiration_date_str:
-                        expiration_date = date.fromisoformat(expiration_date_str)
+                        try:
+                            expiration_date = date.fromisoformat(expiration_date_str)
+                        except ValueError:
+                            expiration_date = self.estimate_expiration(
+                                ingredient.get("name", "unknown"),
+                                acquisition_date
+                            )
                     else:
-                        expiration_date = ScannerService.estimate_expiration(
+                        expiration_date = self.estimate_expiration(
                             ingredient.get("name", "unknown"),
                             acquisition_date
                         )
@@ -210,36 +268,39 @@ class ScannerService:
                         "expiration_date": expiration_date.isoformat(),
                         "confidence": float(ingredient.get("confidence", 1.0)),
                     }
-                    enriched.append(enriched_item)
+                    
+                    # Store in repository
+                    stored = await self.repository.create(enriched_item)
+                    enriched_and_stored.append(stored)
+                    
                 except (ValueError, TypeError) as e:
                     logger.warning(
-                        "[scanner_service] Failed to enrich ingredient %s: %s",
+                        "[scanner_service] Failed to enrich/store ingredient %s: %s",
                         ingredient.get("name", "unknown"),
+                        str(e)
+                    )
+                    continue
+                except Exception as e:
+                    logger.error(
+                        "[scanner_service] Unexpected error storing ingredient: %s",
                         str(e)
                     )
                     continue
             
             logger.info(
-                "[scanner_service] Enriched %d/%d ingredients with expiration estimates",
-                len(enriched),
+                "[scanner_service] Successfully stored %d/%d ingredients",
+                len(enriched_and_stored),
                 len(raw_ingredients)
             )
             
             return {
                 "success": True,
-                "ingredients": enriched,
-                "message": f"Successfully detected {len(enriched)} ingredient(s) from your {scan_type}.",
+                "ingredients": enriched_and_stored,
+                "message": f"Successfully scanned and stored {len(enriched_and_stored)} ingredient(s).",
                 "raw_count": len(raw_ingredients),
+                "stored_count": len(enriched_and_stored),
             }
         
-        except RuntimeError as e:
-            logger.error("[scanner_service] Claude Vision API error: %s", str(e))
-            return {
-                "success": False,
-                "ingredients": [],
-                "message": f"Vision API error: {str(e)}",
-                "raw_count": 0,
-            }
         except Exception as e:
             logger.error("[scanner_service] Unexpected error during scan: %s", str(e))
             return {
@@ -247,4 +308,5 @@ class ScannerService:
                 "ingredients": [],
                 "message": f"Failed to process image: {str(e)}",
                 "raw_count": 0,
+                "stored_count": 0,
             }

@@ -19,14 +19,14 @@ The tasks are organized to enable incremental development with early validation 
   - Set up `package.json` with React, TypeScript, React Router, Axios, Tailwind CSS
   - _Requirements: 8.1, 9.1_
 
-- [ ] 2. Implement backend data models and database layer
-  - [ ] 2.1 Define Pydantic data models
+- [x] 2. Implement backend data models and database layer
+  - [x] 2.1 Define Pydantic data models
     - Create `backend/models.py` with all Pydantic models: `Ingredient`, `PantryItem`, `PantryItemUpdate`, `RecipeIngredient`, `Recipe`, `Substitution`, `VisionResponse`, `TextResponse`, `ScanType` enum
     - Implement `is_expiring` and `is_expired` computed properties on `PantryItem`
     - Add field validation constraints (quantity >= 0, confidence 0-1, match_percentage 0-100)
     - _Requirements: 2.1, 3.1, 3.5_
   
-  - [ ] 2.2 Create database schema and repository
+  - [x] 2.2 Create database schema and repository
     - Create `backend/database.py` with SQLite connection management
     - Define `pantry_items` table schema with indexes on `expiration_date` and `name`
     - Create trigger for automatic `updated_at` timestamp updates
@@ -40,13 +40,13 @@ The tasks are organized to enable incremental development with early validation 
     - Write to repository, read back, assert equivalence
     - Test with edge cases: minimum/maximum quantities, boundary dates
 
-- [ ] 3. Checkpoint - Database layer validation
+- [x] 3. Checkpoint - Database layer validation
   - Ensure all tests pass, verify database schema created correctly
   - Test CRUD operations manually with sample data
   - Ask the user if questions arise
 
-- [ ] 4. Implement AI client layer
-  - [ ] 4.1 Create Claude Vision API client
+- [x] 4. Implement AI client layer
+  - [x] 4.1 Create Claude Vision API client
     - Create `backend/clients/vision_client.py` with `ClaudeVisionClient` class
     - Implement `__init__` with API key and retry configuration
     - Implement `analyze_image` method with retry logic and error handling
@@ -54,7 +54,7 @@ The tasks are organized to enable incremental development with early validation 
     - Add custom exception `VisionAPIError` for API failures
     - _Requirements: 10.1, 10.2, 10.6_
   
-  - [ ] 4.2 Create Claude Text API client
+  - [x] 4.2 Create Claude Text API client
     - Create `backend/clients/text_client.py` with `ClaudeTextClient` class
     - Implement `__init__` with API key and retry configuration
     - Implement `generate_recipes` method with structured prompt building
@@ -62,8 +62,8 @@ The tasks are organized to enable incremental development with early validation 
     - Add custom exception `TextAPIError` for API failures
     - _Requirements: 10.1, 10.3, 10.6_
 
-- [ ] 5. Implement parser utilities
-  - [ ] 5.1 Create ingredient parser
+- [x] 5. Implement parser utilities
+  - [x] 5.1 Create ingredient parser
     - Create `backend/parsers/ingredient_parser.py` with `IngredientParser` class
     - Implement `parse` static method to convert Vision API JSON to `Ingredient` list
     - Implement `pretty_print` static method to serialize `Ingredient` list to JSON
@@ -77,7 +77,7 @@ The tasks are organized to enable incremental development with early validation 
     - Parse → pretty_print → parse, assert equivalence
     - Test with edge cases: missing optional fields, special characters in names
   
-  - [ ] 5.3 Create recipe parser
+  - [x] 5.3 Create recipe parser
     - Create `backend/parsers/recipe_parser.py` with `RecipeParser` class
     - Implement `parse` static method to convert Text API JSON to `Recipe` list
     - Implement `pretty_print` static method to serialize `Recipe` list to JSON
@@ -91,26 +91,26 @@ The tasks are organized to enable incremental development with early validation 
     - Parse → pretty_print → parse, assert equivalence
     - Test with multiple ingredients, varying step counts
   
-  - [ ] 5.5 Create substitution parser
+  - [x] 5.5 Create substitution parser
     - Create `backend/parsers/substitution_parser.py` with `SubstitutionParser` class
     - Implement `parse` static method to convert Text API JSON to `Substitution` list
     - Implement `pretty_print` static method to serialize `Substitution` list to JSON
     - _Requirements: 5.3, 10.5_
 
-- [ ] 6. Checkpoint - Parser layer validation
+- [x] 6. Checkpoint - Parser layer validation
   - Ensure all parser tests pass
   - Manually test parsers with sample Claude API responses
   - Ask the user if questions arise
 
-- [ ] 7. Implement backend service layer
-  - [ ] 7.1 Create scanner service
+- [x] 7. Implement backend service layer
+  - [x] 7.1 Create scanner service
     - Create `backend/services/scanner_service.py` with `ScannerService` class
     - Implement `scan_image` method coordinating Vision API call, parsing, enrichment, storage
     - Implement `estimate_expiration` method with hardcoded ingredient category lookup
     - Add image validation (format, size constraints)
     - _Requirements: 1.1, 1.2, 1.3, 1.4_
   
-  - [ ] 7.2 Create pantry service
+  - [x] 7.2 Create pantry service
     - Create `backend/services/pantry_service.py` with `PantryService` class
     - Implement `get_all_items` with expiration status computation
     - Implement `add_item`, `update_item`, `delete_item` delegating to repository
@@ -136,7 +136,7 @@ The tasks are organized to enable incremental development with early validation 
     - **Validates: Requirements 3.1, 3.5**
     - Generate items with dates ranging from past to future, verify expiring/expired flags
   
-  - [ ] 7.5 Create recipe service
+  - [x] 7.5 Create recipe service
     - Create `backend/services/recipe_service.py` with `RecipeService` class
     - Implement `get_recommendations` coordinating pantry fetch, prompt building, Text API call, parsing
     - Implement `calculate_match_percentage` computing available ingredient ratio
@@ -150,25 +150,25 @@ The tasks are organized to enable incremental development with early validation 
     - Verify match percentage = (available / N) × 100
     - Verify missing ingredients are correctly identified
   
-  - [ ] 7.7 Create substitution service
+  - [x] 7.7 Create substitution service
     - Create `backend/services/substitution_service.py` with `SubstitutionService` class
     - Implement `get_substitutions` building context-aware prompts with available ingredients
     - Parse substitution responses and flag available alternatives
     - _Requirements: 5.1, 5.2, 5.3, 5.4, 5.5_
 
-- [ ] 8. Checkpoint - Service layer validation
+- [x] 8. Checkpoint - Service layer validation
   - Run all service layer property tests
   - Manually test services with mock AI responses
   - Ask the user if questions arise
 
 - [ ] 9. Implement FastAPI backend routes
-  - [ ] 9.1 Create API router and main application
+  - [x] 9.1 Create API router and main application
     - Create `backend/main.py` with FastAPI app initialization
     - Configure CORS middleware for frontend communication
     - Set up dependency injection for services and database
     - _Requirements: 9.1, 9.5_
   
-  - [ ] 9.2 Implement scan endpoint
+  - [-] 9.2 Implement scan endpoint
     - Create `backend/routers/scan.py` with `POST /api/scan` endpoint
     - Accept multipart form data with image file and scan type
     - Call `ScannerService.scan_image`
@@ -176,7 +176,7 @@ The tasks are organized to enable incremental development with early validation 
     - Handle errors with appropriate status codes (400, 422, 500)
     - _Requirements: 1.5, 9.3, 9.6, 9.7_
   
-  - [ ] 9.3 Implement pantry endpoints
+  - [-] 9.3 Implement pantry endpoints
     - Create `backend/routers/pantry.py` with pantry CRUD endpoints
     - `GET /api/pantry` - retrieve all items
     - `PUT /api/pantry/{item_id}` - update item
@@ -184,14 +184,14 @@ The tasks are organized to enable incremental development with early validation 
     - Add request validation with Pydantic models
     - _Requirements: 2.3, 2.4, 2.5, 9.5_
   
-  - [ ] 9.4 Implement recipe endpoints
+  - [-] 9.4 Implement recipe endpoints
     - Create `backend/routers/recipes.py` with `GET /api/recipes` endpoint
     - Accept query parameters: `prioritize_expiring`, `max_recipes`
     - Call `RecipeService.get_recommendations`
     - Return recipes sorted by match percentage
     - _Requirements: 4.1, 4.2, 4.3, 9.4_
   
-  - [ ] 9.5 Implement substitution endpoint
+  - [-] 9.5 Implement substitution endpoint
     - Create `backend/routers/substitutions.py` with `POST /api/substitute` endpoint
     - Accept request body with recipe ID, missing ingredient, recipe context
     - Call `SubstitutionService.get_substitutions`
@@ -205,18 +205,18 @@ The tasks are organized to enable incremental development with early validation 
     - Return service status and timestamp
     - _Requirements: 9.2_
 
-- [ ] 10. Checkpoint - Backend API validation
+- [~] 10. Checkpoint - Backend API validation
   - Test all API endpoints with Postman or curl
   - Verify error handling for invalid requests
   - Verify Claude API integration with real API calls
   - Ask the user if questions arise
 
 - [ ] 11. Implement frontend data models and API client
-  - [ ] 11.1 Define TypeScript interfaces
+  - [~] 11.1 Define TypeScript interfaces
     - Create `frontend/src/types/index.ts` with all interfaces: `PantryItem`, `Ingredient`, `Recipe`, `RecipeIngredient`, `Substitution`, `ChammachMessage`
     - _Requirements: 2.1, 4.5_
   
-  - [ ] 11.2 Create Axios API client
+  - [~] 11.2 Create Axios API client
     - Create `frontend/src/services/apiClient.ts` with Axios instance
     - Configure base URL pointing to FastAPI backend
     - Implement API methods: `scanImage`, `getPantry`, `updatePantryItem`, `deletePantryItem`, `getRecipes`, `getSubstitutions`, `healthCheck`
@@ -224,21 +224,21 @@ The tasks are organized to enable incremental development with early validation 
     - _Requirements: 8.3, 9.2_
 
 - [ ] 12. Implement frontend React context and state management
-  - [ ] 12.1 Create pantry context
+  - [~] 12.1 Create pantry context
     - Create `frontend/src/context/PantryContext.tsx` with React Context + useReducer
     - Define state shape: `pantryItems`, `isLoading`, `error`
     - Implement actions: `ADD_ITEMS`, `UPDATE_ITEM`, `DELETE_ITEM`, `SET_LOADING`, `SET_ERROR`
     - Create `PantryProvider` component wrapping the app
     - _Requirements: 2.3, 8.4_
   
-  - [ ] 12.2 Create recipe context
+  - [~] 12.2 Create recipe context
     - Create `frontend/src/context/RecipeContext.tsx` for recipe state
     - Define state shape: `recipes`, `currentRecipe`, `currentStep`, `isLoading`
     - Implement actions: `SET_RECIPES`, `SELECT_RECIPE`, `NEXT_STEP`, `PREV_STEP`
     - _Requirements: 4.3, 6.4_
 
 - [ ] 13. Implement frontend core components
-  - [ ] 13.1 Create Scanner component
+  - [~] 13.1 Create Scanner component
     - Create `frontend/src/components/Scanner.tsx`
     - Implement drag-and-drop file upload with react-dropzone or native HTML5
     - Display image preview before upload
@@ -253,7 +253,7 @@ The tasks are organized to enable incremental development with early validation 
     - Test upload success and error handling
     - Mock API client responses
   
-  - [ ] 13.3 Create PantryView component
+  - [~] 13.3 Create PantryView component
     - Create `frontend/src/components/PantryView.tsx`
     - Fetch pantry items from context
     - Display items in a list/table sorted by expiration date
@@ -270,7 +270,7 @@ The tasks are organized to enable incremental development with early validation 
     - **Validates: Requirements 3.2, 3.5**
     - Render items with expiring/expired flags, verify distinct CSS classes applied
   
-  - [ ] 13.5 Create RecipeList component
+  - [~] 13.5 Create RecipeList component
     - Create `frontend/src/components/RecipeList.tsx`
     - Display recipe cards with name, prep time, match percentage
     - Show badge for recipes using expiring items
@@ -278,7 +278,7 @@ The tasks are organized to enable incremental development with early validation 
     - Show loading state while fetching recommendations
     - _Requirements: 4.3, 4.4, 4.6_
   
-  - [ ] 13.6 Create RecipeView component
+  - [~] 13.6 Create RecipeView component
     - Create `frontend/src/components/RecipeView.tsx`
     - Display current recipe step with large readable text
     - Show progress indicator (Step X of Y)
@@ -294,27 +294,27 @@ The tasks are organized to enable incremental development with early validation 
     - Set step position, navigate away, return, verify position restored
 
 - [ ] 14. Implement Chammach mascot component
-  - [ ] 14.1 Create Chammach component with animations
+  - [~] 14.1 Create Chammach component with animations
     - Create `frontend/src/components/Chammach.tsx`
     - Implement CSS animations or integrate Lottie for spoon character
     - Add speech bubble with dynamic text
     - Support different animation states: idle, pantry, recipes, cooking
     - _Requirements: 7.1, 7.5, 7.6_
   
-  - [ ] 14.2 Add contextual messaging logic
+  - [~] 14.2 Add contextual messaging logic
     - Create `frontend/src/utils/chammachMessages.ts` with context-aware message generator
     - Return different messages based on context: pantry tips, recipe explanations, cooking guidance
     - Integrate Chammach into PantryView, RecipeList, RecipeView components
     - _Requirements: 7.2, 7.3, 7.4_
 
 - [ ] 15. Implement frontend routing and navigation
-  - [ ] 15.1 Set up React Router
+  - [~] 15.1 Set up React Router
     - Create `frontend/src/App.tsx` with BrowserRouter
     - Define routes: `/` (Scanner), `/pantry` (PantryView), `/recipes` (RecipeList), `/recipe/:id` (RecipeView)
     - Create navigation header with links
     - _Requirements: 8.2_
   
-  - [ ] 15.2 Add loading and error states
+  - [~] 15.2 Add loading and error states
     - Create `frontend/src/components/LoadingSpinner.tsx`
     - Create `frontend/src/components/ErrorMessage.tsx`
     - Integrate loading spinner for API calls
@@ -322,7 +322,7 @@ The tasks are organized to enable incremental development with early validation 
     - _Requirements: 8.3, 8.4, 8.5_
 
 - [ ] 16. Implement styling and responsiveness
-  - [ ] 16.1 Apply Tailwind CSS styling to all components
+  - [~] 16.1 Apply Tailwind CSS styling to all components
     - Style Scanner with centered upload area and drag-drop effects
     - Style PantryView with table/card layout and expiration color coding
     - Style RecipeList with card grid layout
@@ -330,26 +330,26 @@ The tasks are organized to enable incremental development with early validation 
     - Style Chammach with positioned speech bubble
     - _Requirements: 8.1, 8.6_
   
-  - [ ] 16.2 Add visual indicators for expiring items
+  - [~] 16.2 Add visual indicators for expiring items
     - Apply warning colors (yellow/orange) for expiring items (within 3 days)
     - Apply danger colors (red) for expired items
     - Add icons or badges for visual prominence
     - _Requirements: 3.2, 3.5_
   
-  - [ ] 16.3 Ensure responsive design
+  - [~] 16.3 Ensure responsive design
     - Test and adjust layouts for desktop (1920x1080), tablet (768x1024)
     - Use Tailwind responsive breakpoints (sm, md, lg)
     - Ensure touch-friendly controls on tablet
     - _Requirements: 8.6_
 
-- [ ] 17. Checkpoint - Frontend integration validation
+- [~] 17. Checkpoint - Frontend integration validation
   - Test full user flows: scan → pantry → recipes → cooking
   - Verify frontend-backend communication
   - Test error handling and edge cases
   - Ask the user if questions arise
 
 - [ ] 18. Implement field validation and error handling
-  - [ ] 18.1 Add Vision API response validation
+  - [~] 18.1 Add Vision API response validation
     - Create `backend/validators/vision_validator.py`
     - Implement validation checking required fields: ingredient name, acquisition date
     - Reject responses missing required fields with descriptive errors
@@ -360,7 +360,7 @@ The tasks are organized to enable incremental development with early validation 
     - **Validates: Requirements 1.4**
     - Generate responses with/without required fields, verify accept/reject behavior
   
-  - [ ] 18.3 Add recipe response validation
+  - [~] 18.3 Add recipe response validation
     - Implement validation for recipe name, ingredients list, steps array, prep time
     - Reject incomplete recipes with descriptive errors
     - _Requirements: 4.5, 13.1_
@@ -371,19 +371,19 @@ The tasks are organized to enable incremental development with early validation 
     - Generate valid recipe responses, verify all fields extracted correctly
 
 - [ ] 19. Integration and final wiring
-  - [ ] 19.1 Wire all components together in App.tsx
+  - [~] 19.1 Wire all components together in App.tsx
     - Import all contexts, components, and routes
     - Ensure state flows correctly between components
     - Add global error boundary for unhandled errors
     - _Requirements: 8.1, 8.2_
   
-  - [ ] 19.2 Configure environment variables
+  - [~] 19.2 Configure environment variables
     - Create `.env` files for frontend (API base URL) and backend (Anthropic API key, database path)
     - Add `.env.example` templates with dummy values
     - Document required environment variables in README
     - _Requirements: 10.1_
   
-  - [ ] 19.3 Add development scripts
+  - [~] 19.3 Add development scripts
     - Add `npm run dev` script for frontend development server
     - Add `uvicorn` command for backend development server with hot reload
     - Document startup instructions in README
@@ -394,7 +394,7 @@ The tasks are organized to enable incremental development with early validation 
     - Test substitution flow with missing ingredients
     - Test error scenarios: API failures, invalid uploads, network errors
 
-- [ ] 20. Final checkpoint and documentation
+- [~] 20. Final checkpoint and documentation
   - Run all property tests and unit tests
   - Perform end-to-end manual testing of all user flows
   - Verify Chammach animations and contextual messages

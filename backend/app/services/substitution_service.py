@@ -4,6 +4,8 @@ Substitution Service — Ingredient substitution suggestions.
 Provides intelligent substitution recommendations for missing ingredients
 using Claude Text API with context-aware prompting.
 
+Async-first implementation with proper error handling and logging.
+
 Validates: Requirements 5.1, 5.2, 5.3, 5.4, 5.5
 """
 
@@ -21,6 +23,7 @@ class SubstitutionService:
     
     Uses Claude Text API to suggest alternatives for missing ingredients
     based on available pantry items and recipe context.
+    Implements async-first patterns throughout.
     """
     
     def __init__(self, repository: PantryRepository):
@@ -31,11 +34,12 @@ class SubstitutionService:
             repository: PantryRepository instance for pantry lookups
         """
         self.repository = repository
+        logger.debug("[substitution_service] Initialized with repository")
     
     async def get_substitutions(
         self,
         missing_ingredient: str,
-        recipe_name: str,
+        recipe_context: str,
         pantry_items: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """
@@ -47,7 +51,7 @@ class SubstitutionService:
         
         Args:
             missing_ingredient: Name of the missing ingredient
-            recipe_name: Name of the recipe for context
+            recipe_context: Name/description of recipe for context
             pantry_items: Optional list of available items. If not provided,
                          fetches from repository.
         
@@ -66,7 +70,7 @@ class SubstitutionService:
         logger.info(
             "[substitution_service] Looking for substitutes for '%s' in recipe '%s'",
             missing_ingredient,
-            recipe_name
+            recipe_context
         )
         
         try:
@@ -82,10 +86,13 @@ class SubstitutionService:
                     "message": "Your pantry is empty. No substitutes available.",
                 }
             
+            # Get available ingredient names
+            available_names = [item.get("name", "") for item in pantry_items]
+            
             # Get substitution suggestions from Claude
             raw_substitutions = await claude_client.get_substitutions(
                 missing_ingredient=missing_ingredient,
-                recipe_name=recipe_name,
+                recipe_name=recipe_context,
                 pantry_items=pantry_items,
             )
             
@@ -106,9 +113,9 @@ class SubstitutionService:
             )
             
             # Enrich substitutions with availability flags
-            enriched_substitutions = await self._enrich_substitutions(
+            enriched_substitutions = self._enrich_substitutions(
                 raw_substitutions,
-                pantry_items
+                available_names
             )
             
             return {
@@ -128,10 +135,10 @@ class SubstitutionService:
                 "message": f"Failed to find substitutes: {str(e)}",
             }
     
-    async def _enrich_substitutions(
-        self,
+    @staticmethod
+    def _enrich_substitutions(
         substitutions: List[Dict[str, Any]],
-        pantry_items: List[Dict[str, Any]],
+        available_names: List[str],
     ) -> List[Dict[str, Any]]:
         """
         Enrich substitutions with availability flags.
@@ -141,12 +148,14 @@ class SubstitutionService:
         
         Args:
             substitutions: List of substitution dicts from Claude
-            pantry_items: List of available pantry items
+            available_names: List of available ingredient names
         
         Returns:
             List of substitutions with updated 'available' flags
+        
+        Validates: Requirement 5.3
         """
-        pantry_names = {item.get("name", "").lower() for item in pantry_items}
+        available_lower = {name.lower().strip() for name in available_names}
         
         enriched = []
         for sub in substitutions:
@@ -154,8 +163,8 @@ class SubstitutionService:
             
             # Check if this substitute is in the pantry
             is_available = any(
-                ingredient_name == pname or ingredient_name in pname or pname in ingredient_name
-                for pname in pantry_names
+                ingredient_name == aname or ingredient_name in aname or aname in ingredient_name
+                for aname in available_lower
             )
             
             enriched_sub = {

@@ -29,18 +29,63 @@ class CookedRequest(BaseModel):
 @router.get("/recipes")
 async def recipes(
     prioritize_expiring: bool = Query(True, alias="prioritize_expiring"),
-    max_recipes: int = Query(5, ge=1, le=10),
-    cuisine: str = Query("any"),
+    max_recipes: int = Query(5, ge=1, le=20),
+    cuisine: str = Query(None),
     repo: PantryRepository = Depends(get_repository),
 ):
     """
-    Return AI-ranked meal recommendations from the current pantry.
-    Uses 3-tier failover: Spoonacular → Edamam → Claude.
+    Get meal recommendations based on available pantry ingredients.
+    
+    Query Parameters:
+    - prioritize_expiring (bool, default: true) - Prioritize recipes using expiring items
+    - max_recipes (int, 1-20, default: 5) - Maximum number of recipes to return
+    - cuisine (str, optional) - Cuisine filter hint
+    
+    Returns success response with recipes sorted by:
+    1. usesExpiringItems (true first)
+    2. matchPercentage (highest first)
+    
+    Returns 400 if pantry is empty.
+    Validates query parameters (max_recipes 1-20).
+    
+    Validates: Requirements 4.1, 4.2, 4.3, 9.4
     """
+    # Validate max_recipes parameter
+    if max_recipes < 1 or max_recipes > 20:
+        raise HTTPException(
+            status_code=422,
+            detail="max_recipes must be between 1 and 20"
+        )
+    
+    # Fetch pantry items
     raw_items = await repo.get_all()
+    
+    # Handle empty pantry
+    if not raw_items:
+        raise HTTPException(
+            status_code=400,
+            detail="Your pantry is empty. Scan some ingredients first!"
+        )
+    
+    # Attach expiry flags to items
     pantry = [_attach_expiry_flags(i) for i in raw_items]
-    result = await get_recipes(pantry, prioritize_expiring, max_recipes, cuisine)
-    return result
+    
+    # Get recipe recommendations with 3-tier failover
+    result = await get_recipes(pantry, prioritize_expiring, max_recipes, cuisine or "any")
+    
+    # Build response matching spec format
+    if not result.get("success"):
+        raise HTTPException(
+            status_code=500,
+            detail=result.get("message", "Could not generate recipes")
+        )
+    
+    return {
+        "success": True,
+        "recipes": result.get("recipes", []),
+        "provider": result.get("provider", "claude"),
+        "message": result.get("message", f"Found {len(result.get('recipes', []))} recipes for your pantry."),
+    }
 
 
 @router.get("/recommend")
