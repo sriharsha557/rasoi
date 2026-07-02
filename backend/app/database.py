@@ -82,6 +82,22 @@ class DatabaseConnection:
                 CREATE INDEX IF NOT EXISTS idx_cooked_at
                 ON cooked_history(cooked_at DESC)
             """)
+
+            # pantry_scans table — scan history with Supabase Storage image URL (PRD §6b.1)
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS pantry_scans (
+                    id TEXT PRIMARY KEY,
+                    user_id TEXT NOT NULL DEFAULT 'guest',
+                    image_path TEXT NOT NULL,
+                    scan_type TEXT NOT NULL,
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            await db.execute("""
+                CREATE INDEX IF NOT EXISTS idx_pantry_scans_user
+                ON pantry_scans(user_id, created_at DESC)
+            """)
             
             await db.commit()
     
@@ -297,6 +313,43 @@ class PantryRepository:
             )
             await db.commit()
             return cursor.rowcount
+
+    async def save_scan_record(
+        self, user_id: str, image_path: str, scan_type: str
+    ) -> str:
+        """
+        Persist a scan event to pantry_scans (PRD §6b.1).
+        Returns the generated record ID.
+        """
+        record_id = str(uuid.uuid4())
+        created_at = datetime.utcnow().isoformat()
+        async with await self.db_connection.get_connection() as db:
+            await db.execute(
+                """
+                INSERT INTO pantry_scans (id, user_id, image_path, scan_type, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (record_id, user_id, image_path, scan_type, created_at),
+            )
+            await db.commit()
+        return record_id
+
+    async def get_scan_history(self, user_id: str = "guest", limit: int = 10) -> list[dict]:
+        """Return recent scan records for a user (newest first)."""
+        async with await self.db_connection.get_connection() as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                """
+                SELECT id, user_id, image_path, scan_type, created_at
+                FROM pantry_scans
+                WHERE user_id = ?
+                ORDER BY created_at DESC
+                LIMIT ?
+                """,
+                (user_id, limit),
+            )
+            rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
 
     async def save_cook_history(self, recipe_title: str, ingredients_used: list[str]) -> None:
         """Record a cooked meal in cooked_history for Chammach memory (PRD §6b.1)."""

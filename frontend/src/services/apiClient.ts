@@ -129,10 +129,11 @@ const apiClient = {
    * 
    * Endpoint: POST /api/scan
    */
-  scanImage: async (imageFile: File, scanType: ScanType): Promise<ScanResponse> => {
+  scanImage: async (imageFile: File, scanType: ScanType, userId?: string): Promise<ScanResponse> => {
     const formData = new FormData();
     formData.append('image', imageFile);
     formData.append('scanType', scanType);
+    if (userId) formData.append('userId', userId);
 
     const response = await axiosInstance.post<ScanResponse>('/scan', formData, {
       headers: {

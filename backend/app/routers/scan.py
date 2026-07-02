@@ -1,12 +1,17 @@
 """
 Scan router — POST /api/scan
 Accepts an image upload, calls Claude Vision, saves results to pantry.
+
+Image storage flow (PRD §6.2):
+  image → validate → upload to Supabase Storage (best-effort)
+  → record scan in pantry_scans → send bytes to Claude Vision → save ingredients
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
 from datetime import date
 from typing import Optional
 from app.clients import claude_client
+from app.clients import supabase_client
 from app.database import get_repository, PantryRepository
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
@@ -20,6 +25,7 @@ async def scan_image(
     image: UploadFile = File(...),
     scanType: str = Form("ingredient"),
     append: bool = Form(False),   # False = replace pantry, True = add to existing
+    userId: str = Form("guest"),  # Supabase Auth UID or "guest"
     background_tasks: BackgroundTasks = BackgroundTasks(),
     repo: PantryRepository = Depends(get_repository),
 ):
@@ -27,10 +33,12 @@ async def scan_image(
     Scan an ingredient photo or grocery receipt.
 
     - Validates file type and size
-    - Sends image to Claude Vision
+    - Uploads image to Supabase Storage (best-effort — scan continues if Supabase is not configured)
+    - Records scan in pantry_scans table
+    - Sends image to Claude Vision for ingredient extraction
     - When append=False (default): clears pantry then saves extracted items
     - When append=True: adds extracted items to existing pantry
-    - Returns the saved pantry items
+    - Returns the saved pantry items plus the Supabase image URL
     """
     # Validate content type
     if image.content_type not in ALLOWED_CONTENT_TYPES:
@@ -50,6 +58,31 @@ async def scan_image(
 
     # Determine media type
     media_type = image.content_type or "image/jpeg"
+
+    # ── Supabase Storage upload (PRD §6.2) ──────────────────────────────────
+    # Best-effort: if Supabase is not configured the scan still works normally.
+    image_storage_path: str = ""
+    image_signed_url: str = ""
+    if supabase_client.is_configured():
+        try:
+            image_storage_path, image_signed_url = await supabase_client.upload_scan_image(
+                image_bytes=image_bytes,
+                scan_type=scanType,
+                user_id=userId,
+                content_type=media_type,
+            )
+            # Record in pantry_scans table
+            await repo.save_scan_record(
+                user_id=userId,
+                image_path=image_storage_path,
+                scan_type=scanType,
+            )
+        except Exception as exc:
+            # Non-fatal — log and continue with Claude extraction
+            import logging
+            logging.getLogger(__name__).warning(
+                "[scan] Supabase upload failed (continuing without storage): %s", exc
+            )
 
     try:
         raw_ingredients = await claude_client.extract_ingredients(image_bytes, media_type)
@@ -111,4 +144,25 @@ async def scan_image(
         "success": True,
         "ingredients": saved_with_meta,
         "message": f"Detected {len(saved_with_meta)} ingredient(s) from your {scanType}.",
+        "imageUrl": image_signed_url or None,       # signed URL (1 hour) — None if Supabase not used
+        "imagePath": image_storage_path or None,    # storage path for future signed URL refresh
     }
+
+
+@router.get("/history")
+async def scan_history(
+    userId: str = "guest",
+    limit: int = 10,
+    repo: PantryRepository = Depends(get_repository),
+):
+    """
+    Return the last `limit` scan records for a user with fresh signed URLs.
+    PRD §6b.1 — pantry_scans table.
+    """
+    records = await repo.get_scan_history(user_id=userId, limit=limit)
+    # Re-generate signed URLs for each record (previous ones may have expired)
+    if supabase_client.is_configured():
+        for rec in records:
+            if rec.get("image_path"):
+                rec["image_url"] = await supabase_client.get_signed_url(rec["image_path"])
+    return {"scans": records}

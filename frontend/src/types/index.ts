@@ -98,6 +98,8 @@ export interface ScanResponse {
   success: boolean;
   ingredients: Ingredient[];
   message?: string;
+  imageUrl?: string | null;   // Supabase signed URL (1 hour) — PRD §6.2
+  imagePath?: string | null;  // Storage path for signed URL refresh
 }
 
 export interface PantryResponse {
