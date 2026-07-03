@@ -1,20 +1,10 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useLocation } from 'react-router-dom';
 import { usePantry } from '../context/PantryContext';
 import { useRecipe } from '../context/RecipeContext';
 import { useGuest } from '../context/GuestContext';
-import { WS_BASE_URL } from '../services/apiClient';
-import type { ChammachEvent } from '../types';
-
-const WS_URL = `${WS_BASE_URL}/ws/chammach`;
 
 interface Msg { text: string; emoji: string }
-
-const ANIMATION_EMOJI: Record<ChammachEvent['animation'], string> = {
-  bounce: '🥄',
-  wiggle: '⚠️',
-  talk:   '💬',
-};
 
 const DIALOGUE: Record<string, Msg> = {
   '/':        { text: 'Hey! Scan your fridge to get started!', emoji: '👋' },
@@ -58,88 +48,35 @@ export default function Chammach() {
   const expiringCount = pantryState.pantryItems.filter(i => i.isExpiring || i.isExpired).length;
   const localMsg = getDialogue(pathname, expiringCount, pantryState.pantryItems.length, recipeState.currentRecipe?.name ?? null, isGuest);
 
-  const [visible, setVisible] = useState(true);
+  const [visible, setVisible] = useState(false);
   const [wiggling, setWiggling] = useState(false);
   const [msgKey, setMsgKey] = useState(0);
-
-  // Backend agent event (overrides local dialogue for a few seconds)
-  const [wsEvent, setWsEvent] = useState<ChammachEvent | null>(null);
-  const wsEventTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // WebSocket connection with auto-reconnect
-  useEffect(() => {
-    const connect = () => {
-      try {
-        const ws = new WebSocket(WS_URL);
-        wsRef.current = ws;
-
-        ws.onmessage = (e) => {
-          try {
-            const evt = JSON.parse(e.data) as ChammachEvent;
-            setWsEvent(evt);
-            setVisible(true);
-            setMsgKey(k => k + 1);
-            // Revert to local dialogue after 8 seconds
-            if (wsEventTimer.current) clearTimeout(wsEventTimer.current);
-            wsEventTimer.current = setTimeout(() => setWsEvent(null), 8000);
-          } catch { /* ignore malformed messages */ }
-        };
-
-        ws.onclose = () => {
-          // Reconnect after 5 seconds
-          reconnectTimer.current = setTimeout(connect, 5000);
-        };
-      } catch { /* WebSocket not available (SSR or blocked) */ }
-    };
-
-    connect();
-
-    return () => {
-      wsRef.current?.close();
-      if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
-      if (wsEventTimer.current) clearTimeout(wsEventTimer.current);
-    };
-  }, []);
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setVisible(true);
-      setMsgKey(k => k + 1);
-    }, 0);
-
-    return () => clearTimeout(timer);
-  }, [pathname, expiringCount]);
 
   useEffect(() => {
     if (!visible) return;
     const t = setTimeout(() => {
-      setWiggling(true);
-      setVisible(true);
-      setTimeout(() => setWiggling(false), 700);
-    }, 10000);
+      setVisible(false);
+    }, 7000);
     return () => clearTimeout(t);
   }, [msgKey, visible]);
 
-  const toggle = useCallback(() => setVisible(v => !v), []);
-
-  // Prefer backend agent event over local static dialogue
-  const msg: Msg = wsEvent
-    ? { text: wsEvent.dialogue, emoji: ANIMATION_EMOJI[wsEvent.animation] }
-    : localMsg;
-  const isWiggling = wiggling || wsEvent?.animation === 'wiggle';
+  const showMessage = useCallback(() => {
+    setVisible(true);
+    setMsgKey(k => k + 1);
+    setWiggling(true);
+    setTimeout(() => setWiggling(false), 700);
+  }, []);
 
   return (
     <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2 select-none" role="complementary" aria-label="Chammach assistant">
       {visible && (
         <div key={msgKey} className="animate-fade-in relative max-w-[230px] bg-white border border-gray-200 shadow-card rounded-card px-3.5 py-2.5 text-sm text-gray-800 font-medium leading-snug">
-          <span className="mr-1">{msg.emoji}</span>
-          {msg.text}
+          <span className="mr-1">{localMsg.emoji}</span>
+          {localMsg.text}
           <div className="absolute -bottom-[7px] right-9 w-3 h-3 bg-white border-r border-b border-gray-200 rotate-45" />
         </div>
       )}
-      <button onClick={toggle} title={visible ? 'Dismiss' : 'Show hint'} aria-label="Chammach talking spoon" className={`focus:outline-none cursor-pointer ${isWiggling ? 'animate-wiggle' : ''}`}>
+      <button onClick={showMessage} title="Show Chammach message" aria-label="Chammach talking spoon" className={`focus:outline-none cursor-pointer ${wiggling ? 'animate-wiggle' : ''}`}>
         <SpoonSVG />
       </button>
     </div>
