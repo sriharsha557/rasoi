@@ -1,0 +1,714 @@
+openapi: 3.0.3
+info:
+  title: RasOI Kitchen Intelligence API
+  description: >-
+    AI-powered kitchen intelligence — scan ingredients, manage a pantry, get
+    pantry-based recipe recommendations, ingredient substitutions, meal
+    planning, and the Chammach agentic assistant.
+
+
+    Note: the real-time Chammach assistant is also exposed over a WebSocket at
+    `GET /ws/chammach` (not expressible in OpenAPI). Clients send JSON messages
+    like `{"trigger": "user_action"}` and receive `ChammachEvent` payloads.
+
+
+    A legacy-prefix middleware maps unprefixed paths (e.g. `/pantry`, `/recipes`,
+    `/scan`, `/substitute`, `/planner`, `/chammach`) to their `/api/...`
+    equivalents.
+  version: 1.0.0
+  license:
+    name: Proprietary
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://rasoi-backend-ml4i.onrender.com
+    description: Render production
+
+tags:
+  - name: system
+    description: Health and base routes
+  - name: scan
+    description: Image/receipt scanning
+  - name: pantry
+    description: Pantry CRUD and expiry
+  - name: recipes
+    description: Recipe recommendations and detail
+  - name: substitutions
+    description: Ingredient substitutions
+  - name: planner
+    description: Weekly planner, household, grocery, cuisine profiles
+  - name: chammach
+    description: Agentic kitchen assistant
+
+paths:
+  /:
+    get:
+      tags: [system]
+      summary: App info
+      operationId: getRoot
+      responses:
+        '200':
+          description: Basic app metadata
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  app: { type: string, example: RasOI }
+                  version: { type: string, example: 1.0.0 }
+                  tagline: { type: string }
+                  docs: { type: string, example: /docs }
+
+  /api/health:
+    get:
+      tags: [system]
+      summary: Health check
+      operationId: healthCheck
+      responses:
+        '200':
+          description: Service status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: healthy }
+                  services:
+                    type: object
+                    properties:
+                      database: { type: string, example: up }
+                      visionAI: { type: string, example: up }
+                      textAI: { type: string, example: up }
+                      spoonacular: { type: string, example: configured }
+                      edamam: { type: string, example: not_configured }
+
+  /api/safety/demo-check:
+    get:
+      tags: [system]
+      summary: Demo-day pre-flight safety check
+      operationId: demoSafetyCheck
+      responses:
+        '200':
+          description: Aggregated status of AI, pantry, websocket, provider and storage checks
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  overall: { type: string, enum: [ok, warn, fail] }
+                  checks:
+                    type: object
+                    additionalProperties:
+                      type: object
+                      properties:
+                        status: { type: string, enum: [ok, warn, fail] }
+                        detail: { type: string }
+
+  /api/scan:
+    post:
+      tags: [scan]
+      summary: Scan an ingredient photo or grocery receipt
+      operationId: scanImage
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [image]
+              properties:
+                image:
+                  type: string
+                  format: binary
+                  description: JPEG/PNG/WebP image, max 5 MB
+                scanType:
+                  type: string
+                  default: ingredient
+                  enum: [ingredient, receipt]
+                append:
+                  type: boolean
+                  default: false
+                  description: false = replace pantry, true = add to existing
+                userId:
+                  type: string
+                  default: guest
+                knownExpirationDate:
+                  type: string
+                  format: date
+                  nullable: true
+      responses:
+        '200':
+          description: Extracted and stored ingredients
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ScanResponse' }
+        '400':
+          description: Invalid file type/size or bad form field
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: Vision analysis failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: AI client not configured (missing OPENAI_API_KEY)
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/pantry:
+    get:
+      tags: [pantry]
+      summary: List all pantry items
+      operationId: getPantry
+      responses:
+        '200':
+          description: All items sorted by expiry (soonest first)
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PantryItem' }
+    post:
+      tags: [pantry]
+      summary: Add a pantry item
+      operationId: addPantryItem
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PantryItemCreateRequest' }
+      responses:
+        '200':
+          description: Item created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  item: { $ref: '#/components/schemas/PantryItem' }
+
+  /api/pantry/expiring:
+    get:
+      tags: [pantry]
+      summary: List items expiring within 2 days or already expired
+      operationId: getExpiring
+      responses:
+        '200':
+          description: Expiring/expired items
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items: { $ref: '#/components/schemas/PantryItem' }
+
+  /api/pantry/{item_id}:
+    put:
+      tags: [pantry]
+      summary: Update quantity and/or expiry of a pantry item
+      operationId: updatePantryItem
+      parameters:
+        - $ref: '#/components/parameters/ItemId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PantryItemUpdateRequest' }
+      responses:
+        '200':
+          description: Item updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  item: { $ref: '#/components/schemas/PantryItem' }
+        '400':
+          description: No fields provided to update
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+    delete:
+      tags: [pantry]
+      summary: Remove a pantry item
+      operationId: deletePantryItem
+      parameters:
+        - $ref: '#/components/parameters/ItemId'
+      responses:
+        '200':
+          description: Item removed
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  message: { type: string }
+        '404':
+          description: Item not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/recipes:
+    get:
+      tags: [recipes]
+      summary: Meal recommendations from the current pantry
+      operationId: getRecipes
+      parameters:
+        - name: prioritize_expiring
+          in: query
+          schema: { type: boolean, default: true }
+        - name: max_recipes
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 20, default: 5 }
+        - name: cuisine
+          in: query
+          schema: { type: string }
+          description: e.g. any, Indian, South Indian, North Indian, Pan Indian, Italian, Mexican
+        - name: meal_type
+          in: query
+          schema: { type: string }
+        - name: diet
+          in: query
+          schema: { type: string }
+        - name: max_ready_time
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 240 }
+      responses:
+        '200':
+          description: Recipe recommendations
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecipesResponse' }
+        '422':
+          description: Invalid query parameter
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/recommend:
+    get:
+      tags: [recipes]
+      summary: Recommendation alias with expiry-first ordering
+      operationId: recommend
+      parameters:
+        - name: prioritize_expiry
+          in: query
+          schema: { type: boolean, default: true }
+        - name: cuisine
+          in: query
+          schema: { type: string, default: any }
+        - name: meal_type
+          in: query
+          schema: { type: string }
+        - name: diet
+          in: query
+          schema: { type: string }
+        - name: max_ready_time
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 240 }
+        - name: count
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 10, default: 5 }
+      responses:
+        '200':
+          description: Recipe recommendations
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecipesResponse' }
+
+  /api/recipe/provider-status:
+    get:
+      tags: [recipes]
+      summary: Active recipe provider status
+      operationId: providerStatus
+      responses:
+        '200':
+          description: Provider status
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  active: { type: string, example: supabase+spoonacular }
+                  supabase: { type: string, example: ok }
+                  spoonacular: { type: string, example: ok }
+
+  /api/recipe/search:
+    get:
+      tags: [recipes]
+      summary: Search a recipe by name
+      operationId: searchRecipeDetail
+      parameters:
+        - name: query
+          in: query
+          required: true
+          schema: { type: string, minLength: 2, maxLength: 120 }
+      responses:
+        '200':
+          description: Best-matching recipe
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RecipesResponse' }
+        '404':
+          description: Recipe not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/recipe/{recipe_id}:
+    get:
+      tags: [recipes]
+      summary: Full recipe detail by id
+      operationId: getRecipeDetail
+      parameters:
+        - name: recipe_id
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        '200':
+          description: Recipe detail
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Recipe' }
+        '404':
+          description: Recipe not found
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/pantry/cooked:
+    post:
+      tags: [recipes]
+      summary: Mark a recipe as cooked (removes used ingredients)
+      operationId: markCooked
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CookedRequest' }
+      responses:
+        '200':
+          description: Ingredients removed and cook history saved
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  removed: { type: integer }
+                  remaining: { type: integer }
+                  message: { type: string }
+
+  /api/substitute:
+    post:
+      tags: [substitutions]
+      summary: Suggest pantry-available substitutes for a missing ingredient
+      operationId: substitute
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/SubstitutionRequest' }
+      responses:
+        '200':
+          description: Substitution suggestions
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  substitutions:
+                    type: array
+                    items: { $ref: '#/components/schemas/Substitution' }
+        '400':
+          description: Empty/invalid input
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '502':
+          description: Substitution lookup failed
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: AI client not configured
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/planner/weekly:
+    get:
+      tags: [planner]
+      summary: Build a weekly meal plan from the pantry
+      operationId: weeklyPlanner
+      parameters:
+        - name: region
+          in: query
+          schema: { type: string, default: south_indian }
+        - name: household_size
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 12, default: 2 }
+        - name: days
+          in: query
+          schema: { type: integer, minimum: 1, maximum: 14, default: 7 }
+      responses:
+        '200':
+          description: Weekly plan
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/household/profile:
+    get:
+      tags: [planner]
+      summary: Household profile
+      operationId: householdProfile
+      responses:
+        '200':
+          description: Household profile
+          content:
+            application/json:
+              schema: { type: object }
+
+  /api/grocery/delivery-partners:
+    get:
+      tags: [planner]
+      summary: Grocery delivery partners for a list of items
+      operationId: groceryDeliveryPartners
+      parameters:
+        - name: items
+          in: query
+          description: Comma-separated ingredient names
+          schema: { type: string }
+      responses:
+        '200':
+          description: Delivery partners
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  partners:
+                    type: array
+                    items: { type: object }
+
+  /api/cuisine-profiles:
+    get:
+      tags: [planner]
+      summary: Available cuisine profiles
+      operationId: cuisineProfiles
+      responses:
+        '200':
+          description: Cuisine profiles
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profiles:
+                    type: array
+                    items: { type: object }
+
+  /api/chammach/trigger:
+    post:
+      tags: [chammach]
+      summary: Manually trigger the Chammach agent loop
+      operationId: triggerAgent
+      parameters:
+        - name: trigger
+          in: query
+          schema: { type: string, default: manual }
+      responses:
+        '200':
+          description: Agent loop started
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status: { type: string, example: agent loop started }
+                  trigger: { type: string }
+
+components:
+  parameters:
+    ItemId:
+      name: item_id
+      in: path
+      required: true
+      schema: { type: string }
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        detail: { type: string }
+        message: { type: string }
+
+    PantryItem:
+      type: object
+      properties:
+        id: { type: string }
+        name: { type: string, example: tomato }
+        quantity: { type: number, example: 4 }
+        unit: { type: string, example: pcs }
+        acquisitionDate: { type: string, format: date }
+        expirationDate: { type: string, format: date }
+        createdAt: { type: string }
+        updatedAt: { type: string }
+        isExpiring: { type: boolean, description: expiring within 2 days }
+        isExpired: { type: boolean }
+
+    PantryItemCreateRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string }
+        quantity: { type: number, default: 1.0 }
+        unit: { type: string, default: pcs }
+        acquisitionDate: { type: string, format: date, nullable: true }
+        expirationDate: { type: string, format: date, nullable: true }
+
+    PantryItemUpdateRequest:
+      type: object
+      properties:
+        quantity: { type: number, nullable: true }
+        expirationDate: { type: string, format: date, nullable: true }
+
+    ScannedIngredient:
+      type: object
+      properties:
+        name: { type: string }
+        quantity: { type: number }
+        unit: { type: string }
+        acquisition_date: { type: string, format: date }
+        expiration_date: { type: string, format: date }
+        confidence: { type: number, format: float }
+
+    ScanResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        ingredients:
+          type: array
+          items: { $ref: '#/components/schemas/PantryItem' }
+        message: { type: string }
+        imageUrl: { type: string, nullable: true }
+
+    RecipeIngredient:
+      type: object
+      properties:
+        name: { type: string }
+        quantity: { oneOf: [ { type: string }, { type: number } ] }
+        unit: { type: string }
+        available: { type: boolean }
+        is_optional: { type: boolean }
+        sort_order: { type: integer }
+
+    RecipeStep:
+      type: object
+      properties:
+        step_number: { type: integer }
+        instruction: { type: string }
+        duration_min: { type: integer, nullable: true }
+        tip: { type: string, nullable: true }
+
+    Recipe:
+      type: object
+      properties:
+        id: { type: string }
+        title: { type: string }
+        name: { type: string }
+        cuisine: { type: string, nullable: true }
+        meal_type: { type: string, nullable: true }
+        diet: { type: string, nullable: true }
+        difficulty: { type: string, enum: [Easy, Medium, Hard], nullable: true }
+        prepTimeMinutes: { type: integer }
+        ready_in_min: { type: integer, nullable: true }
+        servings: { type: integer, nullable: true }
+        image_url: { type: string, nullable: true }
+        description: { type: string, nullable: true }
+        calories_kcal: { type: integer, nullable: true }
+        protein_g: { type: number, nullable: true }
+        carbs_g: { type: number, nullable: true }
+        fat_g: { type: number, nullable: true }
+        fiber_g: { type: number, nullable: true }
+        matchPercentage: { type: number }
+        usesExpiringItems: { type: boolean }
+        missingIngredients:
+          type: array
+          items: { type: string }
+        ingredients:
+          type: array
+          items: { $ref: '#/components/schemas/RecipeIngredient' }
+        steps:
+          type: array
+          items: { type: string }
+        cooking_steps:
+          type: array
+          items: { $ref: '#/components/schemas/RecipeStep' }
+        source: { type: string, enum: [supabase, spoonacular, openai] }
+
+    RecipesResponse:
+      type: object
+      properties:
+        success: { type: boolean }
+        provider: { type: string, example: openai }
+        message: { type: string }
+        recipes:
+          type: array
+          items: { $ref: '#/components/schemas/Recipe' }
+
+    CookedRequest:
+      type: object
+      required: [items_used]
+      properties:
+        items_used:
+          type: array
+          items: { type: string }
+          description: Ingredient names to remove from the pantry
+        recipe_title: { type: string, default: Unknown Recipe }
+
+    SubstitutionRequest:
+      type: object
+      required: [recipeId, missingIngredient, recipeContext]
+      properties:
+        recipeId: { type: string }
+        missingIngredient: { type: string }
+        recipeContext: { type: string, description: recipe name for prompt context }
+
+    Substitution:
+      type: object
+      properties:
+        ingredient: { type: string }
+        ratio: { type: string, example: '1:1' }
+        notes: { type: string }
+        available: { type: boolean }
+
+    ChammachEvent:
+      type: object
+      description: Message pushed over the /ws/chammach WebSocket
+      properties:
+        type:
+          type: string
+          enum: [expiry_alert, meal_ready, substitution, idle, low_stock]
+        dialogue: { type: string }
+        animation: { type: string, enum: [bounce, wiggle, talk] }
+        data: { type: object, nullable: true }
