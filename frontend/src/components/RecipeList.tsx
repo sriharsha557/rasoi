@@ -228,7 +228,7 @@ export default function RecipeList() {
               <img
                 src={recipe.imageUrl ?? recipe.image_url ?? recipe.image ?? ''}
                 alt={recipe.title ?? recipe.name}
-                className="h-44 w-full object-cover"
+                className="h-32 w-full object-cover"
                 loading="lazy"
               />
             )}

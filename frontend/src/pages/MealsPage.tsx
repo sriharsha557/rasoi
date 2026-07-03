@@ -228,11 +228,11 @@ function RecipeCard({ recipe, onSelect }: { recipe: Recipe; onSelect: () => void
 
   return (
     <div className="bg-white rounded-card shadow-card hover:shadow-card-hover transition-all hover:-translate-y-0.5 overflow-hidden flex flex-col">
-      <div className="aspect-[4/3] bg-rasoi-panel overflow-hidden">
+      <div className="h-32 bg-rasoi-panel overflow-hidden">
         {imageUrl ? (
           <img src={imageUrl} alt={title} className="h-full w-full object-cover" loading="lazy" />
         ) : (
-          <div className="h-full w-full grid place-items-center text-4xl">🍽️</div>
+          <div className="h-full w-full grid place-items-center text-3xl">🍽️</div>
         )}
       </div>
       <div className="p-5 flex flex-col gap-3 flex-1">

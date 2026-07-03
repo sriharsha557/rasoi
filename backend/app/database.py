@@ -148,6 +148,11 @@ class PantryRepository:
         # app keeps working on the local SQLite store instead of erroring out.
         if PantryRepository._supabase_disabled:
             return None
+        # Force the pantry onto local SQLite (useful when the configured
+        # Supabase key can read but not write, e.g. a publishable/anon key).
+        # The recipe catalogue can still use Supabase for reads.
+        if os.getenv("PANTRY_USE_SQLITE", "").strip().lower() in {"1", "true", "yes"}:
+            return None
         url = os.getenv("SUPABASE_URL", "").rstrip("/")
         key = os.getenv("SUPABASE_SERVICE_KEY", "").strip().split()[0] if os.getenv("SUPABASE_SERVICE_KEY") else ""
         user_id = os.getenv("RASOI_DEMO_USER_ID", DEMO_USER_ID)

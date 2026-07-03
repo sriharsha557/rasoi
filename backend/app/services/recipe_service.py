@@ -216,6 +216,61 @@ def _to_api_recipe(recipe: RecipeModel, source: str = "supabase") -> dict[str, A
     }
 
 
+def _normalise_ai_recipe(raw: dict[str, Any], pantry_names: set[str]) -> dict[str, Any]:
+    """
+    Normalise an AI-generated recipe into the shared API recipe shape and
+    recompute ingredient matching against the actual pantry.
+    """
+    ingredients_in = raw.get("ingredients", []) or []
+    match_pct, missing, enriched = _compute_match(ingredients_in, pantry_names)
+
+    steps = [s for s in (raw.get("steps", []) or []) if s]
+    recipe_id = str(raw.get("id") or _normalise_name(raw.get("name", "recipe")).replace(" ", "-") or "recipe")
+    cooking_steps = [
+        {
+            "id": f"{recipe_id}-{idx + 1}",
+            "recipe_id": recipe_id,
+            "step_number": idx + 1,
+            "instruction": step,
+            "duration_min": None,
+            "tip": None,
+        }
+        for idx, step in enumerate(steps)
+    ]
+    ready = raw.get("prepTimeMinutes") or 30
+
+    return {
+        "id": recipe_id,
+        "title": raw.get("name", ""),
+        "name": raw.get("name", ""),
+        "cuisine": raw.get("cuisine"),
+        "meal_type": None,
+        "mealType": None,
+        "diet": None,
+        "difficulty": raw.get("difficulty"),
+        "ready_in_min": ready,
+        "readyInMin": ready,
+        "prepTimeMinutes": ready,
+        "servings": None,
+        "image_url": None,
+        "imageUrl": None,
+        "image": None,
+        "description": None,
+        "ingredients": enriched,
+        "recipeIngredients": enriched,
+        "cooking_steps": cooking_steps,
+        "cookingSteps": cooking_steps,
+        "steps": steps,
+        "matchPercentage": match_pct,
+        "match_percentage": match_pct,
+        "missingIngredients": missing,
+        "missing_ingredients": missing,
+        "usesExpiringItems": bool(raw.get("usesExpiringItems", False)),
+        "uses_expiring_items": bool(raw.get("usesExpiringItems", False)),
+        "source": "openai",
+    }
+
+
 async def get_recipe_ingredients(recipe_id: str, pantry_names: set[str] | None = None) -> list[dict[str, Any]]:
     rows = await _supabase_get(
         "recipe_ingredients",
@@ -534,6 +589,7 @@ async def get_recipes(
         Dict with success, recipes, provider, message
     """
     pantry_names = {item.get("name", "").lower().strip() for item in pantry_items}
+    pantry_names_norm = _pantry_names(pantry_items)
     cuisine_value = (cuisine or "any").strip()
     filters = {
         "cuisine": cuisine_value if cuisine_value != "any" else None,
@@ -554,6 +610,29 @@ async def get_recipes(
             cuisine_value,
         )
         provider = "spoonacular"
+    elif cuisine_value.lower() == "any":
+        # "What can I cook" — generate recipes that actually use the pantry
+        # items via the AI model, then recompute matches against the pantry.
+        try:
+            ai_recipes = await claude_client.get_recipe_recommendations(
+                pantry_items=pantry_items,
+                prioritize_expiring=prioritize_expiring,
+                max_recipes=max_recipes,
+                cuisine=cuisine_value,
+            )
+            recipes = [_normalise_ai_recipe(r, pantry_names_norm) for r in (ai_recipes or [])]
+            provider = "openai"
+        except Exception as exc:
+            logger.error("AI recipe generation failed: %s", exc)
+            recipes = []
+        # Fall back to the Supabase catalogue if the AI produced nothing.
+        if not recipes:
+            try:
+                recipes = await search_recipes(filters, pantry_items, max_recipes)
+                provider = "supabase"
+            except Exception as exc:
+                logger.error("Supabase recipe lookup failed: %s", exc)
+                recipes = []
     else:
         try:
             recipes = await search_recipes(filters, pantry_items, max_recipes)
