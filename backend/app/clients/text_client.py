@@ -19,7 +19,7 @@ from datetime import date
 
 from openai import OpenAI
 
-from app.clients.ai_config import get_base_url, get_model
+from app.clients.ai_config import get_base_url, get_model, completion_kwargs
 
 
 class TextAPIError(Exception):
@@ -152,13 +152,14 @@ class ClaudeTextClient:
             try:
                 message = self.client.chat.completions.create(
                     model=self.model,
-                    max_completion_tokens=4096,
+                    max_completion_tokens=8192,
                     messages=[
                         {
                             "role": "user",
                             "content": prompt,
                         }
                     ],
+                    **completion_kwargs(),
                 )
                 
                 raw_response = message.choices[0].message.content
@@ -235,13 +236,14 @@ class ClaudeTextClient:
             try:
                 message = self.client.chat.completions.create(
                     model=self.model,
-                    max_completion_tokens=512,
+                    max_completion_tokens=2048,
                     messages=[
                         {
                             "role": "user",
                             "content": prompt,
                         }
                     ],
+                    **completion_kwargs(),
                 )
                 
                 raw_response = message.choices[0].message.content

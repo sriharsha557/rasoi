@@ -16,6 +16,9 @@ services:
       # Deployment / model name
       - key: OPENAI_MODEL
         value: gpt-5.5
+      # Reasoning effort for gpt-5 models (none|low|medium|high|xhigh)
+      - key: OPENAI_REASONING_EFFORT
+        value: low
       # Optional — Spoonacular recipe search (tier-1 provider)
       - key: SPOONACULAR_API_KEY
         sync: false

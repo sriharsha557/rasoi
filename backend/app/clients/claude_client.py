@@ -12,7 +12,7 @@ import base64
 import json
 import re
 
-from app.clients.ai_config import get_async_client, get_model
+from app.clients.ai_config import get_async_client, get_model, completion_kwargs
 
 
 def _encode_image(image_bytes: bytes) -> str:
@@ -60,7 +60,7 @@ Example:
 
     response = await client.chat.completions.create(
         model=get_model(),
-        max_completion_tokens=1024,
+        max_completion_tokens=4096,
         messages=[
             {
                 "role": "user",
@@ -73,6 +73,7 @@ Example:
                 ],
             }
         ],
+        **completion_kwargs(),
     )
 
     raw = response.choices[0].message.content
@@ -153,8 +154,9 @@ Rules:
 
     response = await client.chat.completions.create(
         model=get_model(),
-        max_completion_tokens=4096,
+        max_completion_tokens=8192,
         messages=[{"role": "user", "content": prompt}],
+        **completion_kwargs(),
     )
 
     raw = response.choices[0].message.content
@@ -195,8 +197,9 @@ Prefer substitutes available in the pantry (available: true). If none fit, sugge
 
     response = await client.chat.completions.create(
         model=get_model(),
-        max_completion_tokens=512,
+        max_completion_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
+        **completion_kwargs(),
     )
 
     raw = response.choices[0].message.content

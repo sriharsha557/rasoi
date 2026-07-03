@@ -21,7 +21,7 @@ from app.database import get_repository
 from app.routers.pantry import _attach_expiry_flags
 from app.services.recipe_service import get_recipes
 from app.clients import claude_client as _claude_client
-from app.clients.ai_config import get_async_client, get_model
+from app.clients.ai_config import get_async_client, get_model, completion_kwargs
 from app import guardrails
 
 logger = logging.getLogger(__name__)
@@ -334,9 +334,10 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
     for _ in range(5):
         response = await client.chat.completions.create(
             model=model,
-            max_completion_tokens=1000,
+            max_completion_tokens=4096,
             tools=_OPENAI_TOOLS,
             messages=messages,
+            **completion_kwargs(),
         )
 
         choice = response.choices[0].message

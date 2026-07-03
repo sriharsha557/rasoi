@@ -27,6 +27,25 @@ def get_model() -> str:
     return os.getenv("OPENAI_MODEL", DEFAULT_MODEL)
 
 
+def get_reasoning_effort() -> str | None:
+    """
+    Reasoning effort for gpt-5-series models. Lower effort leaves more of the
+    completion-token budget for the actual answer and is ideal for structured
+    extraction/JSON tasks. Set OPENAI_REASONING_EFFORT="" to omit the parameter
+    entirely (e.g. when pointing OPENAI_MODEL at a non-reasoning model).
+    Supported by gpt-5.5: none | low | medium | high | xhigh.
+    """
+    val = os.getenv("OPENAI_REASONING_EFFORT", "low").strip().lower()
+    return val or None
+
+
+def completion_kwargs() -> dict:
+    """Extra kwargs passed to chat.completions.create (reasoning_effort if set)."""
+    effort = get_reasoning_effort()
+    return {"reasoning_effort": effort} if effort else {}
+
+
+
 def _require_api_key(api_key: str | None = None) -> str:
     key = api_key or os.getenv("OPENAI_API_KEY")
     if not key:

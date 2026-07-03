@@ -17,7 +17,7 @@ from enum import Enum
 
 from openai import OpenAI, APIError, APIConnectionError, APITimeoutError
 
-from app.clients.ai_config import get_base_url, get_model
+from app.clients.ai_config import get_base_url, get_model, completion_kwargs
 
 logger = logging.getLogger(__name__)
 
@@ -257,7 +257,7 @@ Example format:
                 
                 message = self.client.chat.completions.create(
                     model=get_model(),
-                    max_completion_tokens=1024,
+                    max_completion_tokens=4096,
                     messages=[
                         {
                             "role": "user",
@@ -272,6 +272,7 @@ Example format:
                             ],
                         }
                     ],
+                    **completion_kwargs(),
                 )
                 
                 raw_response = message.choices[0].message.content
