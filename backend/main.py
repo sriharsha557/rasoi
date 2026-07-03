@@ -91,6 +91,25 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def legacy_api_prefix_middleware(request: Request, call_next):
+    legacy_prefixes = (
+        "/pantry",
+        "/recipes",
+        "/recipe",
+        "/scan",
+        "/substitute",
+        "/planner",
+        "/cuisine-profiles",
+        "/household",
+        "/grocery",
+        "/chammach",
+    )
+    if request.url.path.startswith(legacy_prefixes):
+        request.scope["path"] = f"/api{request.url.path}"
+    return await call_next(request)
+
+
 # ── Error Handlers ───────────────────────────────────────────────────────────
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
