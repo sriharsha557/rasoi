@@ -84,11 +84,14 @@ MEAL_TEMPLATES: list[dict[str, Any]] = [
 
 
 DEFAULT_HOUSEHOLD = {
-    "id": "home",
-    "name": "My Household",
+    "id": "5d6b4c66-945a-414e-92e4-8fe99ca89e6a",
+    "name": "Rasoi Raja",
+    "email": "raja@rasoi.app",
+    "cuisinePref": ["Indian"],
+    "dietaryRestrictions": [],
     "members": [
-        {"id": "member-1", "name": "Primary cook", "dietaryPreferences": ["vegetarian"], "servings": 1},
-        {"id": "member-2", "name": "Family member", "dietaryPreferences": [], "servings": 1},
+        {"id": "5d6b4c66-945a-414e-92e4-8fe99ca89e6a", "name": "Rasoi Raja", "dietaryPreferences": [], "servings": 2},
+        {"id": "member-2", "name": "Demo family member", "dietaryPreferences": [], "servings": 1},
     ],
     "defaultServings": 2,
 }

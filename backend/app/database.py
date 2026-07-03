@@ -6,10 +6,20 @@ and provides the PantryRepository for CRUD operations on pantry items.
 """
 
 import aiosqlite
+import httpx
+import logging
+import os
 import uuid
 from datetime import datetime, date
 from typing import List, Optional, Dict, Any
 from pathlib import Path
+
+
+DEMO_USER_ID = "5d6b4c66-945a-414e-92e4-8fe99ca89e6a"
+
+
+class _SupabaseAuthError(Exception):
+    """Raised when Supabase rejects the configured key (401/403)."""
 
 
 class DatabaseConnection:
@@ -119,6 +129,10 @@ class PantryRepository:
     Provides async methods for creating, reading, updating, and deleting
     pantry items from the SQLite database.
     """
+
+    # Disabled process-wide after a Supabase auth failure so the app falls
+    # back to the local SQLite store instead of returning HTTP 500.
+    _supabase_disabled: bool = False
     
     def __init__(self, db_connection: DatabaseConnection):
         """
@@ -128,6 +142,74 @@ class PantryRepository:
             db_connection: DatabaseConnection instance
         """
         self.db_connection = db_connection
+
+    def _supabase_config(self) -> Optional[tuple[str, str, str]]:
+        # A prior auth failure disables Supabase sync for this process so the
+        # app keeps working on the local SQLite store instead of erroring out.
+        if PantryRepository._supabase_disabled:
+            return None
+        url = os.getenv("SUPABASE_URL", "").rstrip("/")
+        key = os.getenv("SUPABASE_SERVICE_KEY", "").strip().split()[0] if os.getenv("SUPABASE_SERVICE_KEY") else ""
+        user_id = os.getenv("RASOI_DEMO_USER_ID", DEMO_USER_ID)
+        if not url or not key:
+            return None
+        return url, key, user_id
+
+    def _supabase_headers(self, service_key: str, prefer: str | None = None) -> dict[str, str]:
+        headers = {
+            "Authorization": f"Bearer {service_key}",
+            "apikey": service_key,
+            "Content-Type": "application/json",
+        }
+        if prefer:
+            headers["Prefer"] = prefer
+        return headers
+
+    def _from_supabase_row(self, row: dict[str, Any]) -> dict[str, Any]:
+        return {
+            "id": row["id"],
+            "name": row["name"],
+            "quantity": float(row.get("quantity") or 0),
+            "unit": row.get("unit") or "pcs",
+            "acquisition_date": row.get("acquisition_date") or "",
+            "expiration_date": row.get("expiration_date") or "",
+            "created_at": row.get("created_at") or "",
+            "updated_at": row.get("updated_at") or "",
+        }
+
+    async def _supabase_request(
+        self,
+        method: str,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        json: dict[str, Any] | list[dict[str, Any]] | None = None,
+        prefer: str | None = None,
+    ) -> httpx.Response:
+        config = self._supabase_config()
+        if not config:
+            raise RuntimeError("Supabase is not configured")
+        supabase_url, service_key, _user_id = config
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.request(
+                method,
+                f"{supabase_url}/rest/v1/{path}",
+                params=params,
+                json=json,
+                headers=self._supabase_headers(service_key, prefer),
+            )
+            if response.status_code in {401, 403}:
+                # Key is not a valid service-role key — disable Supabase sync
+                # for this process and fall back to the local SQLite store.
+                PantryRepository._supabase_disabled = True
+                logging.getLogger(__name__).warning(
+                    "[pantry] Supabase returned %s — falling back to local SQLite. "
+                    "Set a valid SUPABASE_SERVICE_KEY (service_role) to sync pantry to Supabase.",
+                    response.status_code,
+                )
+                raise _SupabaseAuthError()
+            response.raise_for_status()
+            return response
     
     async def create(self, item_data: Dict[str, Any]) -> Dict[str, Any]:
         """
@@ -147,9 +229,37 @@ class PantryRepository:
         Raises:
             aiosqlite.IntegrityError: If data violates constraints
         """
+        config = self._supabase_config()
         item_id = str(uuid.uuid4())
         created_at = datetime.utcnow().isoformat()
         updated_at = created_at
+
+        if config:
+            _supabase_url, _service_key, user_id = config
+            payload = {
+                "id": item_id,
+                "user_id": user_id,
+                "name": item_data["name"],
+                "quantity": item_data["quantity"],
+                "unit": item_data["unit"],
+                "acquisition_date": item_data["acquisition_date"],
+                "expiration_date": item_data["expiration_date"],
+            }
+            try:
+                response = await self._supabase_request(
+                    "POST",
+                    "pantry_items",
+                    json=payload,
+                    prefer="return=representation",
+                )
+                rows = response.json()
+                return self._from_supabase_row(rows[0]) if rows else {
+                    **payload,
+                    "created_at": created_at,
+                    "updated_at": updated_at,
+                }
+            except _SupabaseAuthError:
+                pass  # fall back to local SQLite below
         
         async with await self.db_connection.get_connection() as db:
             await db.execute("""
@@ -188,6 +298,23 @@ class PantryRepository:
         Returns:
             List of dictionaries, each representing a pantry item
         """
+        config = self._supabase_config()
+        if config:
+            _supabase_url, _service_key, user_id = config
+            try:
+                response = await self._supabase_request(
+                    "GET",
+                    "pantry_items",
+                    params={
+                        "select": "id,name,quantity,unit,acquisition_date,expiration_date,created_at,updated_at",
+                        "user_id": f"eq.{user_id}",
+                        "order": "expiration_date.asc",
+                    },
+                )
+                return [self._from_supabase_row(row) for row in response.json()]
+            except _SupabaseAuthError:
+                pass  # fall back to local SQLite below
+
         async with await self.db_connection.get_connection() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute("""
@@ -211,6 +338,25 @@ class PantryRepository:
         Returns:
             Dictionary with item data, or None if not found
         """
+        config = self._supabase_config()
+        if config:
+            _supabase_url, _service_key, user_id = config
+            try:
+                response = await self._supabase_request(
+                    "GET",
+                    "pantry_items",
+                    params={
+                        "select": "id,name,quantity,unit,acquisition_date,expiration_date,created_at,updated_at",
+                        "id": f"eq.{item_id}",
+                        "user_id": f"eq.{user_id}",
+                        "limit": 1,
+                    },
+                )
+                rows = response.json()
+                return self._from_supabase_row(rows[0]) if rows else None
+            except _SupabaseAuthError:
+                pass  # fall back to local SQLite below
+
         async with await self.db_connection.get_connection() as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute("""
@@ -241,6 +387,29 @@ class PantryRepository:
         existing = await self.get_by_id(item_id)
         if not existing:
             return None
+
+        config = self._supabase_config()
+        if config:
+            _supabase_url, _service_key, user_id = config
+            payload = {
+                field: updates[field]
+                for field in ["name", "quantity", "unit", "acquisition_date", "expiration_date"]
+                if field in updates
+            }
+            if not payload:
+                return existing
+            try:
+                response = await self._supabase_request(
+                    "PATCH",
+                    "pantry_items",
+                    params={"id": f"eq.{item_id}", "user_id": f"eq.{user_id}"},
+                    json=payload,
+                    prefer="return=representation",
+                )
+                rows = response.json()
+                return self._from_supabase_row(rows[0]) if rows else await self.get_by_id(item_id)
+            except _SupabaseAuthError:
+                pass  # fall back to local SQLite below
         
         # Build dynamic UPDATE query based on provided fields
         update_fields = []
@@ -281,6 +450,22 @@ class PantryRepository:
         Returns:
             True if item was deleted, False if item not found
         """
+        config = self._supabase_config()
+        if config:
+            existing = await self.get_by_id(item_id)
+            if not existing:
+                return False
+            _supabase_url, _service_key, user_id = config
+            try:
+                await self._supabase_request(
+                    "DELETE",
+                    "pantry_items",
+                    params={"id": f"eq.{item_id}", "user_id": f"eq.{user_id}"},
+                )
+                return True
+            except _SupabaseAuthError:
+                pass  # fall back to local SQLite below
+
         async with await self.db_connection.get_connection() as db:
             cursor = await db.execute("""
                 DELETE FROM pantry_items

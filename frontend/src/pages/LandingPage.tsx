@@ -13,7 +13,7 @@ const DIALOGUES = [
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  const { isGuest, enterGuestMode } = useGuest();
+  const { isGuest, demoUser, enterGuestMode } = useGuest();
 
   const [dialogue, setDialogue] = useState(DIALOGUES[0]);
   const [speechVisible, setSpeechVisible] = useState(false);
@@ -176,10 +176,10 @@ export default function LandingPage() {
                 onClick={handleGuest}
                 className="inline-flex items-center gap-2 px-5 py-2 border border-gray-200 hover:bg-gray-50 text-gray-600 text-sm font-medium rounded-pill transition-colors"
               >
-                🥄 Continue as Guest
+                🥄 Welcome Rasoi Raja (guest user)
               </button>
               <p className="text-[11px] text-gray-400 mt-1.5">
-                No sign-up needed — data saved <span className="text-rasoi">locally</span> in your browser.
+                Demo profile — Indian cuisine, 2 servings.
               </p>
             </>
           ) : (
@@ -187,7 +187,7 @@ export default function LandingPage() {
               onClick={() => navigate('/scan')}
               className="inline-flex items-center gap-1.5 px-5 py-2 bg-rasoi-light text-rasoi-dark text-sm font-semibold rounded-pill"
             >
-              ✅ Go to scan →
+              ✅ {demoUser?.displayName ?? 'Rasoi Raja'}: Go to scan →
             </button>
           )}
         </div>

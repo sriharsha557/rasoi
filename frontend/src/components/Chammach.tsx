@@ -43,10 +43,13 @@ export default function Chammach() {
   const { pathname } = useLocation();
   const { state: pantryState } = usePantry();
   const { state: recipeState } = useRecipe();
-  const { isGuest } = useGuest();
+  const { isGuest, demoUser } = useGuest();
 
   const expiringCount = pantryState.pantryItems.filter(i => i.isExpiring || i.isExpired).length;
   const localMsg = getDialogue(pathname, expiringCount, pantryState.pantryItems.length, recipeState.currentRecipe?.name ?? null, isGuest);
+  const demoMsg = pathname === '/' && demoUser
+    ? { text: `Welcome back, ${demoUser.displayName}! Ready to scan?`, emoji: '👋' }
+    : localMsg;
 
   const [visible, setVisible] = useState(false);
   const [wiggling, setWiggling] = useState(false);
@@ -71,8 +74,8 @@ export default function Chammach() {
     <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2 select-none" role="complementary" aria-label="Chammach assistant">
       {visible && (
         <div key={msgKey} className="animate-fade-in relative max-w-[230px] bg-white border border-gray-200 shadow-card rounded-card px-3.5 py-2.5 text-sm text-gray-800 font-medium leading-snug">
-          <span className="mr-1">{localMsg.emoji}</span>
-          {localMsg.text}
+          <span className="mr-1">{demoMsg.emoji}</span>
+          {demoMsg.text}
           <div className="absolute -bottom-[7px] right-9 w-3 h-3 bg-white border-r border-b border-gray-200 rotate-45" />
         </div>
       )}
