@@ -69,13 +69,22 @@ app = FastAPI(
 )
 
 # ── CORS ────────────────────────────────────────────────────────────────────
-allowed_origins = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:5173,https://rasoi.vercel.app,https://cg-rasoi.vercel.app",
-).split(",")
+default_allowed_origins = {
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://rasoi.vercel.app",
+    "https://cg-rasoi.vercel.app",
+}
+configured_allowed_origins = {
+    origin.strip()
+    for origin in os.getenv("ALLOWED_ORIGINS", "").split(",")
+    if origin.strip()
+}
+allowed_origins = sorted(default_allowed_origins | configured_allowed_origins)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
