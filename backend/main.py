@@ -203,15 +203,15 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
-    anthropic_key = bool(os.getenv("ANTHROPIC_API_KEY"))
+    openai_key = bool(os.getenv("OPENAI_API_KEY"))
     spoonacular_key = bool(os.getenv("SPOONACULAR_API_KEY"))
     edamam_configured = bool(os.getenv("EDAMAM_APP_ID") and os.getenv("EDAMAM_APP_KEY"))
     return {
         "status": "healthy",
         "services": {
             "database": "up",
-            "claudeVision": "up" if anthropic_key else "missing_key",
-            "claudeText": "up" if anthropic_key else "missing_key",
+            "visionAI": "up" if openai_key else "missing_key",
+            "textAI": "up" if openai_key else "missing_key",
             "spoonacular": "configured" if spoonacular_key else "not_configured",
             "edamam": "configured" if edamam_configured else "not_configured",
         },

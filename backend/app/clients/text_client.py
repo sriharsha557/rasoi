@@ -11,12 +11,15 @@ Requirements Satisfied:
 - 10.6: Implement retry logic with up to 2 additional retries
 """
 
-import anthropic
 import json
 import os
 import re
 from typing import List, Dict, Any, Optional
 from datetime import date
+
+from openai import OpenAI
+
+from app.clients.ai_config import get_base_url, get_model
 
 
 class TextAPIError(Exception):
@@ -62,18 +65,18 @@ class ClaudeTextClient:
         Validates: Requirement 10.1 (API key configuration)
         """
         if api_key is None:
-            api_key = os.getenv("ANTHROPIC_API_KEY")
+            api_key = os.getenv("OPENAI_API_KEY")
         
         if not api_key:
             raise ValueError(
-                "ANTHROPIC_API_KEY not provided. Pass api_key argument or set "
-                "ANTHROPIC_API_KEY environment variable."
+                "OPENAI_API_KEY not provided. Pass api_key argument or set "
+                "OPENAI_API_KEY environment variable."
             )
         
         self.api_key = api_key
         self.max_retries = max_retries
-        self.client = anthropic.Anthropic(api_key=api_key)
-        self.model = "claude-sonnet-4-6"
+        self.client = OpenAI(api_key=api_key, base_url=get_base_url())
+        self.model = get_model()
     
     def _parse_json_response(self, text: str) -> Dict[str, Any] | List[Dict[str, Any]]:
         """
@@ -147,9 +150,9 @@ class ClaudeTextClient:
         last_error = None
         for attempt in range(1 + self.max_retries):
             try:
-                message = self.client.messages.create(
+                message = self.client.chat.completions.create(
                     model=self.model,
-                    max_tokens=4096,
+                    max_completion_tokens=4096,
                     messages=[
                         {
                             "role": "user",
@@ -158,7 +161,7 @@ class ClaudeTextClient:
                     ],
                 )
                 
-                raw_response = message.content[0].text
+                raw_response = message.choices[0].message.content
                 result = self._parse_json_response(raw_response)
                 
                 # Ensure result is a list
@@ -230,9 +233,9 @@ class ClaudeTextClient:
         last_error = None
         for attempt in range(1 + self.max_retries):
             try:
-                message = self.client.messages.create(
+                message = self.client.chat.completions.create(
                     model=self.model,
-                    max_tokens=512,
+                    max_completion_tokens=512,
                     messages=[
                         {
                             "role": "user",
@@ -241,7 +244,7 @@ class ClaudeTextClient:
                     ],
                 )
                 
-                raw_response = message.content[0].text
+                raw_response = message.choices[0].message.content
                 result = self._parse_json_response(raw_response)
                 
                 # Ensure result is a list

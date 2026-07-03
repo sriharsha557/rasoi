@@ -1,20 +1,18 @@
 """
-Claude API client for Vision (image scanning) and Text (recipes, substitutions).
-All functions are async and use AsyncAnthropic to avoid blocking the event loop.
+AI client for Vision (image scanning) and Text (recipes, substitutions).
+
+Uses the OpenAI SDK against an Azure AI Foundry (OpenAI-compatible) endpoint.
+All functions are async and use AsyncOpenAI to avoid blocking the event loop.
+
+NOTE: the module is still named ``claude_client`` for backwards compatibility
+with existing imports across the codebase; it no longer uses Anthropic/Claude.
 """
 
-import anthropic
 import base64
-import os
 import json
 import re
 
-
-def _get_async_client() -> anthropic.AsyncAnthropic:
-    api_key = os.getenv("ANTHROPIC_API_KEY")
-    if not api_key:
-        raise RuntimeError("ANTHROPIC_API_KEY environment variable is not set")
-    return anthropic.AsyncAnthropic(api_key=api_key)
+from app.clients.ai_config import get_async_client, get_model
 
 
 def _encode_image(image_bytes: bytes) -> str:
@@ -22,7 +20,7 @@ def _encode_image(image_bytes: bytes) -> str:
 
 
 def _parse_json_response(text: str) -> dict | list:
-    """Strip markdown fences and parse JSON from Claude's response."""
+    """Strip markdown fences and parse JSON from the model's response."""
     cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
     cleaned = re.sub(r"\s*```$", "", cleaned.strip(), flags=re.MULTILINE)
     return json.loads(cleaned.strip())
@@ -35,7 +33,7 @@ async def extract_ingredients(image_bytes: bytes, media_type: str = "image/jpeg"
     Returns a list of dicts:
         [{ name, quantity, unit, acquisition_date, expiration_date, confidence }]
     """
-    client = _get_async_client()
+    client = get_async_client()
     b64 = _encode_image(image_bytes)
 
     from datetime import date, timedelta
@@ -60,28 +58,24 @@ Example:
   {{"name": "tomato", "quantity": 4, "unit": "pcs", "acquisition_date": "{today}", "expiration_date": "{default_expiry}", "confidence": 0.95}}
 ]"""
 
-    message = await client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=1024,
+    response = await client.chat.completions.create(
+        model=get_model(),
+        max_completion_tokens=1024,
         messages=[
             {
                 "role": "user",
                 "content": [
-                    {
-                        "type": "image",
-                        "source": {
-                            "type": "base64",
-                            "media_type": media_type,
-                            "data": b64,
-                        },
-                    },
                     {"type": "text", "text": prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{media_type};base64,{b64}"},
+                    },
                 ],
             }
         ],
     )
 
-    raw = message.content[0].text
+    raw = response.choices[0].message.content
     result = _parse_json_response(raw)
     return result if isinstance(result, list) else []
 
@@ -99,7 +93,7 @@ async def get_recipe_recommendations(
     pantry_items are expected to have camelCase keys (isExpiring, isExpired)
     as produced by _attach_expiry_flags().
     """
-    client = _get_async_client()
+    client = get_async_client()
 
     # Items have camelCase keys from _attach_expiry_flags
     expiring = [i for i in pantry_items if i.get("isExpiring") or i.get("isExpired")]
@@ -157,13 +151,13 @@ Rules:
 - Sort by matchPercentage descending (expiring-using recipes first if prioritize_expiring)
 """
 
-    message = await client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=4096,
+    response = await client.chat.completions.create(
+        model=get_model(),
+        max_completion_tokens=4096,
         messages=[{"role": "user", "content": prompt}],
     )
 
-    raw = message.content[0].text
+    raw = response.choices[0].message.content
     result = _parse_json_response(raw)
     return result if isinstance(result, list) else []
 
@@ -178,7 +172,7 @@ async def get_substitutions(
 
     Returns list of { ingredient, ratio, notes, available }.
     """
-    client = _get_async_client()
+    client = get_async_client()
 
     pantry_names = [i["name"] for i in pantry_items]
 
@@ -199,12 +193,12 @@ Suggest 1-3 substitutes. Return ONLY a JSON array:
 Prefer substitutes available in the pantry (available: true). If none fit, suggest common pantry staples (available: false).
 """
 
-    message = await client.messages.create(
-        model="claude-sonnet-4-6",
-        max_tokens=512,
+    response = await client.chat.completions.create(
+        model=get_model(),
+        max_completion_tokens=512,
         messages=[{"role": "user", "content": prompt}],
     )
 
-    raw = message.content[0].text
+    raw = response.choices[0].message.content
     result = _parse_json_response(raw)
     return result if isinstance(result, list) else []

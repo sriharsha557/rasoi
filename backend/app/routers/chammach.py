@@ -16,17 +16,16 @@ from typing import Optional
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, BackgroundTasks
 from pydantic import BaseModel
-from anthropic import AsyncAnthropic
 
 from app.database import get_repository
 from app.routers.pantry import _attach_expiry_flags
 from app.services.recipe_service import get_recipes
 from app.clients import claude_client as _claude_client
+from app.clients.ai_config import get_async_client, get_model
 from app import guardrails
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["chammach"])
-_client = AsyncAnthropic()
 
 
 # ── Pydantic model ─────────────────────────────────────────────────────────────
@@ -170,6 +169,19 @@ _TOOLS = [
     },
 ]
 
+# OpenAI function-calling format derived from the Anthropic-style _TOOLS above.
+_OPENAI_TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": t["name"],
+            "description": t.get("description", ""),
+            "parameters": t["input_schema"],
+        },
+    }
+    for t in _TOOLS
+]
+
 _SYSTEM_PROMPT = """
 You are Chammach, RasOI's agentic kitchen assistant — a friendly talking spoon.
 
@@ -306,70 +318,92 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
     """
     logger.info("[chammach] Agent loop triggered by: %s", trigger)
 
+    client = get_async_client()
+    model = get_model()
+
     messages: list[dict] = [
+        {"role": "system", "content": _SYSTEM_PROMPT},
         {
             "role": "user",
             "content": f"Trigger: {trigger}. Please check the pantry and help the user.",
-        }
+        },
     ]
 
     final_event: ChammachEvent | None = None
 
     for _ in range(5):
-        response = await _client.messages.create(
-            model="claude-sonnet-4-6",
-            max_tokens=1000,
-            system=_SYSTEM_PROMPT,
-            tools=_TOOLS,
+        response = await client.chat.completions.create(
+            model=model,
+            max_completion_tokens=1000,
+            tools=_OPENAI_TOOLS,
             messages=messages,
         )
 
-        tool_calls = [b for b in response.content if b.type == "tool_use"]
-        text_blocks = [b for b in response.content if b.type == "text"]
+        choice = response.choices[0].message
+        tool_calls = choice.tool_calls or []
 
         if not tool_calls:
-            text = text_blocks[0].text if text_blocks else "All good in the kitchen!"
+            text = choice.content or "All good in the kitchen!"
             final_event = ChammachEvent(type="idle", dialogue=text[:200], animation="bounce")
             break
 
-        messages.append({"role": "assistant", "content": response.content})
+        messages.append({
+            "role": "assistant",
+            "content": choice.content or "",
+            "tool_calls": [
+                {
+                    "id": tc.id,
+                    "type": "function",
+                    "function": {
+                        "name": tc.function.name,
+                        "arguments": tc.function.arguments,
+                    },
+                }
+                for tc in tool_calls
+            ],
+        })
 
-        tool_results = []
         tool_call_index = 0
         for tool_call in tool_calls:
             tool_call_index += 1
 
+            tool_name = tool_call.function.name
+            try:
+                tool_input = json.loads(tool_call.function.arguments or "{}")
+            except json.JSONDecodeError:
+                tool_input = {}
+
             # Rule 1/2/4: Block disallowed tools before execution
             allowed, rejection_reason = guardrails.validate_agent_tool_call(
-                tool_call.name, tool_call.input
+                tool_name, tool_input
             )
             if not allowed:
-                logger.warning("[chammach-14.3] Blocked tool call: %s — %s", tool_call.name, rejection_reason)
+                logger.warning("[chammach-14.3] Blocked tool call: %s — %s", tool_name, rejection_reason)
                 result = json.dumps({"error": rejection_reason})
             else:
                 # Rule 5: Graceful degradation — tool errors don't abort the loop
                 try:
-                    result = await _execute_tool(tool_call.name, tool_call.input)
+                    result = await _execute_tool(tool_name, tool_input)
                 except Exception as tool_exc:
-                    logger.warning("[chammach-14.3] Tool %s failed: %s", tool_call.name, tool_exc)
+                    logger.warning("[chammach-14.3] Tool %s failed: %s", tool_name, tool_exc)
                     result = json.dumps({"error": f"Tool temporarily unavailable: {tool_exc}"})
 
             # Rule 6: Audit log every call
             guardrails.log_agent_tool_call(
                 trigger=trigger,
-                tool_name=tool_call.name,
-                tool_input=tool_call.input,
+                tool_name=tool_name,
+                tool_input=tool_input,
                 result_summary=result[:120],
                 call_index=tool_call_index,
             )
 
-            tool_results.append({
-                "type": "tool_result",
-                "tool_use_id": tool_call.id,
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tool_call.id,
                 "content": result,
             })
-            if tool_call.name == "notify_user":
-                inp = tool_call.input
+            if tool_name == "notify_user":
+                inp = tool_input
                 # Rule 7: Transparency — validate and sanitise dialogue
                 dialogue = guardrails.validate_chammach_dialogue(inp.get("dialogue", ""))
                 final_event = ChammachEvent(
@@ -382,8 +416,6 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
 
         if final_event:
             break
-
-        messages.append({"role": "user", "content": tool_results})
 
     if final_event:
         logger.info("[chammach] Broadcasting: %s", final_event.dialogue)

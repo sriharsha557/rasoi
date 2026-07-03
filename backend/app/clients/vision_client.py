@@ -7,7 +7,6 @@ error handling, and support for both ingredient photos and receipt analysis.
 Requirements: 10.1, 10.2, 10.6
 """
 
-import anthropic
 import base64
 import json
 import re
@@ -15,6 +14,10 @@ import logging
 from typing import Optional
 from datetime import date, timedelta
 from enum import Enum
+
+from openai import OpenAI, APIError, APIConnectionError, APITimeoutError
+
+from app.clients.ai_config import get_base_url, get_model
 
 logger = logging.getLogger(__name__)
 
@@ -78,7 +81,7 @@ class ClaudeVisionClient:
         
         self.api_key = api_key
         self.max_retries = max_retries
-        self.client = anthropic.Anthropic(api_key=api_key)
+        self.client = OpenAI(api_key=api_key, base_url=get_base_url())
         logger.info(f"ClaudeVisionClient initialized with max_retries={max_retries}")
     
     def _encode_image(self, image_bytes: bytes) -> str:
@@ -252,28 +255,26 @@ Example format:
                     f"for {scan_type.value} scan"
                 )
                 
-                message = self.client.messages.create(
-                    model="claude-sonnet-4-20250514",
-                    max_tokens=1024,
+                message = self.client.chat.completions.create(
+                    model=get_model(),
+                    max_completion_tokens=1024,
                     messages=[
                         {
                             "role": "user",
                             "content": [
+                                {"type": "text", "text": prompt},
                                 {
-                                    "type": "image",
-                                    "source": {
-                                        "type": "base64",
-                                        "media_type": media_type,
-                                        "data": b64,
+                                    "type": "image_url",
+                                    "image_url": {
+                                        "url": f"data:{media_type};base64,{b64}",
                                     },
                                 },
-                                {"type": "text", "text": prompt},
                             ],
                         }
                     ],
                 )
                 
-                raw_response = message.content[0].text
+                raw_response = message.choices[0].message.content
                 logger.debug(f"Vision API response received (length: {len(raw_response)})")
                 
                 # Parse the JSON response
@@ -282,7 +283,7 @@ Example format:
                 
                 return result if isinstance(result, list) else []
             
-            except (anthropic.APIError, anthropic.APIConnectionError, anthropic.APITimeoutError) as e:
+            except (APIError, APIConnectionError, APITimeoutError) as e:
                 last_error = e
                 
                 if retry_count < self.max_retries:

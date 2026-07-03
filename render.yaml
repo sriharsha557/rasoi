@@ -7,9 +7,15 @@ services:
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     plan: free
     envVars:
-      # Required — Claude Vision, recipe generation, substitutions
-      - key: ANTHROPIC_API_KEY
+      # Required — OpenAI / Azure AI Foundry (Vision, recipes, substitutions)
+      - key: OPENAI_API_KEY
         sync: false
+      # OpenAI-compatible endpoint (Azure AI Foundry v1). Override if it changes.
+      - key: OPENAI_BASE_URL
+        value: https://IntelligentPantry-ai-foundry.services.ai.azure.com/openai/v1
+      # Deployment / model name
+      - key: OPENAI_MODEL
+        value: gpt-5.5
       # Optional — Spoonacular recipe search (tier-1 provider)
       - key: SPOONACULAR_API_KEY
         sync: false
