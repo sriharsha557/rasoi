@@ -12,13 +12,14 @@ Endpoints:
 from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks
 from pydantic import BaseModel
 from app.services.recipe_service import (
-        get_continental_recipe,
-        get_provider_status,
-        get_recipe,
-        get_recipes,
-        search_continental_recipe,
-        search_recipes,
+    get_continental_recipe,
+    get_provider_status,
+    get_recipe,
+    get_recipes,
+    search_continental_recipe,
+    search_recipes,
 )
+from app.services.planner_service import get_planner_recipe_by_name
 from app.routers.pantry import _attach_expiry_flags
 from app.database import get_repository, PantryRepository
 
@@ -138,6 +139,8 @@ async def search_recipe_detail(query: str = Query(..., min_length=2, max_length=
         recipes = []
 
     recipe = recipes[0] if recipes else await search_continental_recipe(query)
+    if not recipe:
+        recipe = get_planner_recipe_by_name(query)
     if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found.")
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
+import re
 from typing import Any
 from urllib.parse import quote_plus
 
@@ -119,6 +120,137 @@ def get_delivery_partners(query_items: list[str] | None = None) -> list[dict[str
     ]
 
 
+def get_planner_recipe_by_name(meal_name: str) -> dict[str, Any] | None:
+    """Return a lightweight recipe detail for planner template meals."""
+    requested = _normalise_lookup(meal_name)
+    meal = next(
+        (
+            template
+            for template in MEAL_TEMPLATES
+            if _normalise_lookup(template["name"]) == requested
+            or requested in _normalise_lookup(template["name"])
+            or _normalise_lookup(template["name"]) in requested
+        ),
+        None,
+    )
+    if not meal:
+        return None
+
+    profile = CUISINE_PROFILES.get(meal["profile"], CUISINE_PROFILES["south_indian"])
+    ingredients = [
+        {
+            "id": f"planner-{meal['name'].lower().replace(' ', '-')}-{index}",
+            "recipe_id": f"planner-{meal['name'].lower().replace(' ', '-')}",
+            "name": ingredient,
+            "quantity": "as needed",
+            "unit": "",
+            "is_optional": False,
+            "sort_order": index,
+            "available": False,
+        }
+        for index, ingredient in enumerate(meal["ingredients"], start=1)
+    ]
+    steps = [
+        {
+            "id": f"planner-{meal['name'].lower().replace(' ', '-')}-step-1",
+            "recipe_id": f"planner-{meal['name'].lower().replace(' ', '-')}",
+            "step_number": 1,
+            "instruction": "Prep and measure all listed ingredients.",
+            "duration_min": 5,
+            "tip": "Keep pantry ingredients separate from items you need to buy.",
+        },
+        {
+            "id": f"planner-{meal['name'].lower().replace(' ', '-')}-step-2",
+            "recipe_id": f"planner-{meal['name'].lower().replace(' ', '-')}",
+            "step_number": 2,
+            "instruction": "Cook the base ingredients until tender, then season to match the selected regional profile.",
+            "duration_min": 20,
+            "tip": f"{profile['name']} meals lean {', '.join(profile['flavor_notes'][:2])}.",
+        },
+        {
+            "id": f"planner-{meal['name'].lower().replace(' ', '-')}-step-3",
+            "recipe_id": f"planner-{meal['name'].lower().replace(' ', '-')}",
+            "step_number": 3,
+            "instruction": "Finish with fresh garnish and serve hot.",
+            "duration_min": 5,
+            "tip": "Adjust salt, acid, and spice at the end.",
+        },
+    ]
+    nutrition = meal["nutrition"]
+    return {
+        "id": f"planner-{meal['name'].lower().replace(' ', '-')}",
+        "title": meal["name"],
+        "name": meal["name"],
+        "cuisine": profile["name"],
+        "meal_type": "Lunch",
+        "mealType": "Lunch",
+        "diet": "vegetarian",
+        "ready_in_min": 30,
+        "readyInMin": 30,
+        "prepTimeMinutes": 30,
+        "servings": 2,
+        "image_url": None,
+        "imageUrl": None,
+        "image": None,
+        "description": f"A planner-generated {profile['name']} meal built around {', '.join(meal['ingredients'][:3])}.",
+        "calories_kcal": nutrition.calories,
+        "caloriesKcal": nutrition.calories,
+        "protein_g": nutrition.protein_g,
+        "proteinG": nutrition.protein_g,
+        "carbs_g": nutrition.carbs_g,
+        "carbsG": nutrition.carbs_g,
+        "fat_g": nutrition.fat_g,
+        "fatG": nutrition.fat_g,
+        "fiber_g": nutrition.fiber_g,
+        "fiberG": nutrition.fiber_g,
+        "ingredients": ingredients,
+        "recipeIngredients": ingredients,
+        "cooking_steps": steps,
+        "cookingSteps": steps,
+        "steps": [step["instruction"] for step in steps],
+        "matchPercentage": 0,
+        "missingIngredients": meal["ingredients"],
+        "usesExpiringItems": False,
+        "source": "planner",
+    }
+
+
+def get_planner_recipes(
+    cuisine: str | None = None,
+    meal_type: str | None = None,
+    diet: str | None = None,
+    max_ready_time: int | None = None,
+    limit: int = 6,
+) -> list[dict[str, Any]]:
+    """Return lightweight planner recipes for catalogue fallback views."""
+    recipes = [get_planner_recipe_by_name(meal["name"]) for meal in MEAL_TEMPLATES]
+    filtered = [recipe for recipe in recipes if recipe]
+
+    cuisine_value = _normalise_lookup(cuisine or "any")
+    if cuisine_value and cuisine_value != "any":
+        if cuisine_value == "indian":
+            pass
+        elif cuisine_value == "north indian":
+            filtered = [recipe for recipe in filtered if _normalise_lookup(recipe.get("cuisine", "")) in {"punjabi", "north indian"}]
+        elif cuisine_value == "pan indian":
+            pass
+        else:
+            filtered = [recipe for recipe in filtered if _normalise_lookup(recipe.get("cuisine", "")) == cuisine_value]
+
+    meal_type_value = _normalise_lookup(meal_type or "any")
+    if meal_type_value and meal_type_value != "any":
+        filtered = [recipe for recipe in filtered if _normalise_lookup(recipe.get("mealType", "")) == meal_type_value]
+
+    diet_value = _normalise_lookup(diet or "any")
+    if diet_value and diet_value != "any":
+        filtered = [recipe for recipe in filtered if _normalise_lookup(recipe.get("diet", "")) == diet_value]
+
+    if max_ready_time:
+        filtered = [recipe for recipe in filtered if int(recipe.get("prepTimeMinutes") or 0) <= max_ready_time]
+
+    return filtered[:limit]
+
+
 def build_weekly_plan(
     pantry_items: list[dict[str, Any]],
     region: str = "south_indian",
@@ -179,6 +311,10 @@ def build_weekly_plan(
 
 def _item_name(item: dict[str, Any]) -> str:
     return str(item.get("name") or item.get("ingredient") or "").lower().strip()
+
+
+def _normalise_lookup(value: str) -> str:
+    return " ".join(re.sub(r"[^a-z0-9]+", " ", value.lower()).split())
 
 
 def _scale_nutrition(nutrition: Nutrition, servings: int) -> dict[str, int]:

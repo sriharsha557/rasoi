@@ -4,7 +4,6 @@ import { usePantry } from '../context/PantryContext';
 export default function Navbar() {
   const { pathname } = useLocation();
   const { state } = usePantry();
-  const hasItems = state.pantryItems.length > 0;
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-100 shadow-sm h-14">
@@ -21,28 +20,24 @@ export default function Navbar() {
 
         {/* Nav links */}
         <div className="flex items-center gap-1 sm:gap-2">
-          {hasItems && (
-            <>
-              <NavLink to="/pantry" current={pathname}>
-                🥦 Pantry
-                <span className="ml-1.5 bg-rasoi text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
-                  {state.pantryItems.length}
-                </span>
-              </NavLink>
-              <NavLink to="/meals" current={pathname}>
-                🍽 Meals
-              </NavLink>
-            </>
-          )}
+          <NavLink to="/pantry" current={pathname}>
+            🥦 Pantry
+            <span className="ml-1.5 bg-white text-[#1D9E75] text-xs font-bold px-1.5 py-0.5 rounded-full">
+              {state.pantryItems.length}
+            </span>
+          </NavLink>
+          <NavLink to="/meals" current={pathname}>
+            🍽 Meals
+          </NavLink>
           <Link
             to="/planner"
-            className="px-3 py-1.5 bg-rasoi hover:bg-rasoi-dark text-white text-sm font-semibold rounded-lg transition-colors flex items-center"
+            className="px-4 py-1.5 bg-[#1D9E75] hover:bg-[#16795A] text-white text-sm font-semibold rounded-pill transition-colors flex items-center"
           >
             📅 Planner
           </Link>
           <Link
             to="/scan"
-            className="ml-2 px-4 py-1.5 bg-rasoi hover:bg-rasoi-dark text-white text-sm font-semibold rounded-pill transition-colors"
+            className="ml-2 px-4 py-1.5 bg-[#1D9E75] hover:bg-[#16795A] text-white text-sm font-semibold rounded-pill transition-colors"
           >
             + Scan
           </Link>
@@ -65,10 +60,10 @@ function NavLink({
   return (
     <Link
       to={to}
-      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-colors flex items-center ${
+      className={`px-3 py-1.5 rounded-pill bg-[#1D9E75] hover:bg-[#16795A] text-white text-sm font-semibold transition-colors flex items-center ${
         isActive
-          ? 'bg-rasoi text-white shadow-sm'
-          : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+          ? 'shadow-sm ring-2 ring-[#1D9E75]/20'
+          : ''
       }`}
     >
       {children}

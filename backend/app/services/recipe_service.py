@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 from app.clients import claude_client
 from app.database import PantryRepository
 from app import guardrails
+from app.services.planner_service import get_planner_recipes
 
 logger = logging.getLogger(__name__)
 
@@ -560,6 +561,16 @@ async def get_recipes(
             logger.error("Supabase recipe lookup failed: %s", exc)
             recipes = []
     
+    if not recipes:
+        if cuisine_value.lower() not in {"italian", "mexican"}:
+            recipes = get_planner_recipes(
+                cuisine=cuisine_value,
+                meal_type=meal_type,
+                diet=diet,
+                max_ready_time=max_ready_time,
+                limit=max_recipes,
+            )
+
     if not recipes:
         return {
             "success": False,

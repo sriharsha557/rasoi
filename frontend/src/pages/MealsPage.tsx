@@ -159,6 +159,12 @@ export default function MealsPage() {
           </label>
         </div>
 
+        {pantryState.pantryItems.length === 0 && (
+          <div className="mb-6 rounded-card border border-rasoi/25 bg-rasoi-light px-4 py-3 text-sm font-semibold text-rasoi-dark">
+            Please scan or add ingredients to personalize your meal ideas.
+          </div>
+        )}
+
         {error && (
           <div className="mb-6 rounded-card border border-rasoi-red bg-rasoi-red-light px-4 py-3 text-sm font-semibold text-rasoi-red">
             {error}
