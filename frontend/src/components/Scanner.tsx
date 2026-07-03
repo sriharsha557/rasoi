@@ -27,7 +27,6 @@ interface ScannerProps {
  */
 const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5MB
 const ACCEPTED_TYPES = ['image/jpeg', 'image/png', 'image/jpg'];
-const ACCEPTED_EXTENSIONS = ['.jpg', '.jpeg', '.png'];
 
 /**
  * Scanner Component
@@ -50,6 +49,7 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [knowsExpiryDate, setKnowsExpiryDate] = useState(false);
   const [knownExpiryDate, setKnownExpiryDate] = useState('');
+  const shouldUseCamera = scanType === 'ingredient';
 
   /**
    * Validate file type and size
@@ -300,7 +300,8 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
             <input
               ref={fileInputRef}
               type="file"
-              accept={ACCEPTED_EXTENSIONS.join(',')}
+              accept="image/*"
+              capture={shouldUseCamera ? 'environment' : undefined}
               onChange={handleFileInputChange}
               className="hidden"
             />
@@ -321,7 +322,9 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
               <p className="text-base font-semibold text-gray-800 mb-1">
                 {isDragging ? 'Drop image here' : 'Drag and drop an image here'}
               </p>
-              <p className="text-sm text-gray-600 mb-3">or click to browse</p>
+              <p className="text-sm text-gray-600 mb-3">
+                {shouldUseCamera ? 'or tap to open camera' : 'or click to browse'}
+              </p>
               <p className="text-xs text-gray-500">
                 Supported: JPEG, PNG · Max 5 MB
               </p>

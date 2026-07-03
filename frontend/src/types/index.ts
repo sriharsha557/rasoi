@@ -42,10 +42,27 @@ export interface Ingredient {
  * Recipe ingredient with availability tracking.
  */
 export interface RecipeIngredient {
+  id?: string;
+  recipe_id?: string;
   name: string;
-  quantity: number;
-  unit: string;
+  quantity: number | string;
+  unit?: string;
+  is_optional?: boolean;
+  isOptional?: boolean;
+  sort_order?: number;
+  sortOrder?: number;
   available: boolean;
+}
+
+export interface RecipeStep {
+  id?: string;
+  recipe_id?: string;
+  step_number: number;
+  stepNumber?: number;
+  instruction: string;
+  duration_min?: number | null;
+  durationMin?: number | null;
+  tip?: string | null;
 }
 
 /**
@@ -55,15 +72,47 @@ export interface RecipeIngredient {
  */
 export interface Recipe {
   id: string;
+  title?: string;
   name: string;
   cuisine?: string;
+  meal_type?: string | null;
+  mealType?: string | null;
+  diet?: string | null;
   difficulty?: 'Easy' | 'Medium' | 'Hard';
   ingredients: RecipeIngredient[];
+  recipeIngredients?: RecipeIngredient[];
   steps: string[];
+  cooking_steps?: RecipeStep[];
+  cookingSteps?: RecipeStep[];
+  ready_in_min?: number;
+  readyInMin?: number;
   prepTimeMinutes: number;
+  servings?: number | null;
+  image_url?: string | null;
+  imageUrl?: string | null;
+  image?: string | null;
+  description?: string | null;
+  calories_kcal?: number | null;
+  caloriesKcal?: number | null;
+  protein_g?: number | null;
+  proteinG?: number | null;
+  carbs_g?: number | null;
+  carbsG?: number | null;
+  fat_g?: number | null;
+  fatG?: number | null;
+  fiber_g?: number | null;
+  fiberG?: number | null;
   matchPercentage: number;
   usesExpiringItems: boolean;
   missingIngredients: string[];
+  source?: 'supabase' | 'spoonacular' | string;
+}
+
+export interface RecipeSearchFilters {
+  cuisine?: string;
+  mealType?: string;
+  diet?: string;
+  maxReadyTime?: number;
 }
 
 /**
@@ -118,7 +167,8 @@ export interface DeleteResponse {
 
 export interface RecipesResponse {
   recipes: Recipe[];
-  provider?: string;  // 'spoonacular' | 'edamam' | 'claude'
+  provider?: string;
+  message?: string;
 }
 
 export interface SubstitutionsResponse {

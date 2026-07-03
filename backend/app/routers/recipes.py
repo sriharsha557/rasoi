@@ -5,16 +5,20 @@ Endpoints:
   GET  /api/recipes                 — meal recommendations (full list)
   GET  /api/recommend               — alias with expiry/cuisine/count params
   GET  /api/recipe/provider-status  — which API tier is active
-  GET  /api/recipe/{id}             — full recipe detail (Spoonacular)
+    GET  /api/recipe/{id}             — full recipe detail
   POST /api/pantry/cooked           — mark recipe cooked, remove used ingredients
 """
 
-import os
-import asyncio
-import httpx
 from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks
 from pydantic import BaseModel
-from app.services.recipe_service import get_recipes, get_provider_status
+from app.services.recipe_service import (
+        get_continental_recipe,
+        get_provider_status,
+        get_recipe,
+        get_recipes,
+        search_continental_recipe,
+        search_recipes,
+)
 from app.routers.pantry import _attach_expiry_flags
 from app.database import get_repository, PantryRepository
 
@@ -31,6 +35,9 @@ async def recipes(
     prioritize_expiring: bool = Query(True, alias="prioritize_expiring"),
     max_recipes: int = Query(5, ge=1, le=20),
     cuisine: str = Query(None),
+    meal_type: str = Query(None),
+    diet: str = Query(None),
+    max_ready_time: int = Query(None, ge=1, le=240),
     repo: PantryRepository = Depends(get_repository),
 ):
     """
@@ -60,25 +67,29 @@ async def recipes(
     # Fetch pantry items
     raw_items = await repo.get_all()
     
-    # Handle empty pantry
-    if not raw_items:
-        raise HTTPException(
-            status_code=400,
-            detail="Your pantry is empty. Scan some ingredients first!"
-        )
-    
     # Attach expiry flags to items
     pantry = [_attach_expiry_flags(i) for i in raw_items]
     
-    # Get recipe recommendations with 3-tier failover
-    result = await get_recipes(pantry, prioritize_expiring, max_recipes, cuisine or "any")
+    # Get recipe recommendations from Supabase for Indian/local recipes and
+    # Spoonacular for continental cuisines.
+    result = await get_recipes(
+        pantry,
+        prioritize_expiring,
+        max_recipes,
+        cuisine or "any",
+        meal_type,
+        diet,
+        max_ready_time,
+    )
     
     # Build response matching spec format
     if not result.get("success"):
-        raise HTTPException(
-            status_code=500,
-            detail=result.get("message", "Could not generate recipes")
-        )
+        return {
+            "success": True,
+            "recipes": [],
+            "provider": result.get("provider", "supabase"),
+            "message": result.get("message", "No recipes found."),
+        }
     
     return {
         "success": True,
@@ -92,18 +103,18 @@ async def recipes(
 async def recommend(
     prioritize_expiry: bool = Query(True),
     cuisine: str = Query("any"),
+    meal_type: str = Query(None),
+    diet: str = Query(None),
+    max_ready_time: int = Query(None, ge=1, le=240),
     count: int = Query(5, ge=1, le=10),
     repo: PantryRepository = Depends(get_repository),
 ):
     """
     Alias of /api/recipes with expiry-first ordering and cuisine hint.
-    Cuisine filtering is applied as a best-effort hint to Claude fallback.
     """
     raw_items = await repo.get_all()
-    if not raw_items:
-        raise HTTPException(status_code=400, detail="Pantry is empty. Scan your fridge first.")
     pantry = [_attach_expiry_flags(i) for i in raw_items]
-    result = await get_recipes(pantry, prioritize_expiry, count)
+    result = await get_recipes(pantry, prioritize_expiry, count, cuisine, meal_type, diet, max_ready_time)
     return result
 
 
@@ -117,116 +128,48 @@ async def provider_status():
 @router.get("/recipe/search")
 async def search_recipe_detail(query: str = Query(..., min_length=2, max_length=120)):
     """
-    Search Spoonacular by meal name and return the first full recipe detail.
-    Used by planner cards so a planned meal opens a real recipe from the API.
+    Search Supabase recipes by meal name first, then Spoonacular for
+    continental Italian/Mexican recipes.
     """
-    spoonacular_key = os.getenv("SPOONACULAR_API_KEY")
-    if not spoonacular_key:
-        raise HTTPException(status_code=404, detail="Spoonacular recipe search is not configured.")
+    recipes = []
+    try:
+        recipes = await search_recipes({"query": query}, [], 1)
+    except Exception:
+        recipes = []
 
-    async with httpx.AsyncClient(timeout=10) as client:
-        search_resp = await client.get(
-            "https://api.spoonacular.com/recipes/complexSearch",
-            params={
-                "apiKey": spoonacular_key,
-                "query": query,
-                "number": 1,
-                "addRecipeInformation": False,
-            },
-        )
-
-        if search_resp.status_code == 402:
-            raise HTTPException(status_code=502, detail="Spoonacular quota exhausted.")
-        if search_resp.status_code != 200:
-            raise HTTPException(status_code=502, detail=f"Spoonacular search error {search_resp.status_code}.")
-
-        results = search_resp.json().get("results", [])
-        if not results:
-            raise HTTPException(status_code=404, detail="Recipe not found.")
-
-        recipe_id = results[0]["id"]
-        detail_resp = await client.get(
-            f"https://api.spoonacular.com/recipes/{recipe_id}/information",
-            params={"apiKey": spoonacular_key, "includeNutrition": False},
-        )
-
-    if detail_resp.status_code == 404:
+    recipe = recipes[0] if recipes else await search_continental_recipe(query)
+    if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found.")
-    if detail_resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"Spoonacular error {detail_resp.status_code}.")
 
-    data = detail_resp.json()
-    steps = [
-        step["step"]
-        for inst in data.get("analyzedInstructions", [])
-        for step in inst.get("steps", [])
-    ]
-    ingredients = [
-        {"name": i.get("name", ""), "quantity": i.get("amount", 1), "unit": i.get("unit", "pcs"), "available": True}
-        for i in data.get("extendedIngredients", [])
-    ]
     return {
         "success": True,
-        "provider": "spoonacular",
-        "recipes": [
-            {
-                "id": str(data["id"]),
-                "name": data["title"],
-                "cuisine": (data.get("cuisines") or [""])[0],
-                "difficulty": "Medium",
-                "prepTimeMinutes": data.get("readyInMinutes", 30),
-                "matchPercentage": 100,
-                "usesExpiringItems": False,
-                "ingredients": ingredients,
-                "missingIngredients": [],
-                "steps": steps or ["Open the source recipe for detailed cooking steps."],
-            }
-        ],
-        "message": "Recipe loaded from Spoonacular.",
+        "provider": recipe.get("source", "supabase"),
+        "recipes": [recipe],
+        "message": "Recipe loaded.",
     }
 
 
 @router.get("/recipe/{recipe_id}")
-async def get_recipe_detail(recipe_id: str):
+async def get_recipe_detail(
+    recipe_id: str,
+    repo: PantryRepository = Depends(get_repository),
+):
     """
-    Fetch full recipe detail from Spoonacular by numeric ID.
-    Returns 404 if Spoonacular is not configured or the recipe is not found.
+    Fetch full recipe detail from Supabase first, then Spoonacular for
+    continental recipe ids.
     """
-    spoonacular_key = os.getenv("SPOONACULAR_API_KEY")
-    if not spoonacular_key or recipe_id.startswith("claude_"):
-        raise HTTPException(status_code=404, detail="Recipe detail not available.")
-
-    async with httpx.AsyncClient(timeout=10) as client:
-        resp = await client.get(
-            f"https://api.spoonacular.com/recipes/{recipe_id}/information",
-            params={"apiKey": spoonacular_key, "includeNutrition": False},
-        )
-
-    if resp.status_code == 404:
+    raw_items = await repo.get_all()
+    pantry = [_attach_expiry_flags(i) for i in raw_items]
+    recipe = None
+    try:
+        recipe = await get_recipe(recipe_id, pantry)
+    except Exception:
+        recipe = None
+    if not recipe:
+        recipe = await get_continental_recipe(recipe_id, pantry)
+    if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found.")
-    if resp.status_code != 200:
-        raise HTTPException(status_code=502, detail=f"Spoonacular error {resp.status_code}.")
-
-    data = resp.json()
-    steps = [
-        step["step"]
-        for inst in data.get("analyzedInstructions", [])
-        for step in inst.get("steps", [])
-    ]
-    return {
-        "id": str(data["id"]),
-        "name": data["title"],
-        "image": data.get("image", ""),
-        "source": "spoonacular",
-        "prepTimeMinutes": data.get("readyInMinutes", 30),
-        "servings": data.get("servings", 2),
-        "ingredients": [
-            {"name": i.get("name", ""), "quantity": i.get("amount", 1), "unit": i.get("unit", "pcs"), "available": True}
-            for i in data.get("extendedIngredients", [])
-        ],
-        "steps": steps,
-        "url": data.get("sourceUrl", ""),
-    }
+    return recipe
 
 
 @router.post("/pantry/cooked")

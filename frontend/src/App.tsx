@@ -27,6 +27,7 @@ function App() {
               <Route path="/meals" element={<MealsPage />} />
               <Route path="/planner" element={<PlannerPage />} />
               <Route path="/recipe" element={<RecipePage />} />
+              <Route path="/recipe/:id" element={<RecipePage />} />
             </Routes>
             <Chammach />
           </BrowserRouter>

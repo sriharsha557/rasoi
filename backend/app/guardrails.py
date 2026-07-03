@@ -366,8 +366,8 @@ def validate_chammach_dialogue(dialogue: str) -> str:
 #  S3 — WebSocket disconnected mid-demo
 #       Prevention: frontend auto-reconnect (5s) + heartbeat ping
 #
-#  S4 — All recipe APIs fail (Spoonacular quota + Edamam rate limit)
-#       Prevention: Claude fallback always available — provider-status check
+#  S4 — Recipe providers unavailable (Supabase config + Spoonacular quota)
+#       Prevention: provider-status check before demo
 #
 #  S5 — Supabase Storage unavailable
 #       Prevention: upload is best-effort, scan continues without image storage

@@ -116,6 +116,85 @@ COMMENT ON TABLE public.cooked_history IS
     'Cook history for Chammach memory — prevents repeat recommendations (PRD §8b.3)';
 
 
+-- ------------------------------------------------------------
+-- 2e. recipes
+--     Master recipe catalogue. Indian recipes are stored here so
+--     the app does not depend on external recipe APIs for Indian cuisine.
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.recipes (
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    title           TEXT        NOT NULL,
+    cuisine         TEXT        NOT NULL,
+    meal_type       TEXT,
+    diet            TEXT,
+    ready_in_min    INT         CHECK (ready_in_min IS NULL OR ready_in_min >= 0),
+    servings        INT         CHECK (servings IS NULL OR servings > 0),
+    image_url       TEXT,
+    description     TEXT,
+    calories_kcal   INT         CHECK (calories_kcal IS NULL OR calories_kcal >= 0),
+    protein_g       NUMERIC     CHECK (protein_g IS NULL OR protein_g >= 0),
+    carbs_g         NUMERIC     CHECK (carbs_g IS NULL OR carbs_g >= 0),
+    fat_g           NUMERIC     CHECK (fat_g IS NULL OR fat_g >= 0),
+    fiber_g         NUMERIC     CHECK (fiber_g IS NULL OR fiber_g >= 0),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipes_filters
+    ON public.recipes (cuisine, meal_type, diet, ready_in_min);
+
+CREATE INDEX IF NOT EXISTS idx_recipes_title
+    ON public.recipes (title);
+
+COMMENT ON TABLE public.recipes IS
+    'Master recipe catalogue for app-owned recipes, especially Indian cuisine';
+
+
+-- ------------------------------------------------------------
+-- 2f. recipe_ingredients
+--     Ordered ingredient list for each recipe.
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.recipe_ingredients (
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    recipe_id       UUID        NOT NULL REFERENCES public.recipes(id) ON DELETE CASCADE,
+    name            TEXT        NOT NULL,
+    quantity        TEXT,
+    is_optional     BOOLEAN     NOT NULL DEFAULT FALSE,
+    sort_order      INT         NOT NULL DEFAULT 0
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_recipe_order
+    ON public.recipe_ingredients (recipe_id, sort_order ASC);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_ingredients_name
+    ON public.recipe_ingredients (name);
+
+COMMENT ON TABLE public.recipe_ingredients IS
+    'Recipe ingredient rows used for pantry matching and detail display';
+
+
+-- ------------------------------------------------------------
+-- 2g. recipe_steps
+--     Ordered cooking instructions for each recipe.
+-- ------------------------------------------------------------
+
+CREATE TABLE IF NOT EXISTS public.recipe_steps (
+    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    recipe_id       UUID        NOT NULL REFERENCES public.recipes(id) ON DELETE CASCADE,
+    step_number     INT         NOT NULL CHECK (step_number > 0),
+    instruction     TEXT        NOT NULL,
+    duration_min    INT         CHECK (duration_min IS NULL OR duration_min >= 0),
+    tip             TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_recipe_steps_recipe_order
+    ON public.recipe_steps (recipe_id, step_number ASC);
+
+COMMENT ON TABLE public.recipe_steps IS
+    'Ordered recipe cooking instructions with optional durations and tips';
+
+
 -- ============================================================
 -- 3. TRIGGERS — auto-update updated_at
 -- ============================================================
@@ -231,6 +310,33 @@ CREATE POLICY "Users can read own cook history"
 CREATE POLICY "Users can insert own cook history"
     ON public.cooked_history FOR INSERT
     WITH CHECK (auth.uid() = user_id);
+
+
+-- recipes catalogue
+ALTER TABLE public.recipes ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can read recipes"
+    ON public.recipes FOR SELECT
+    TO anon, authenticated
+    USING (true);
+
+
+-- recipe_ingredients catalogue
+ALTER TABLE public.recipe_ingredients ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can read recipe ingredients"
+    ON public.recipe_ingredients FOR SELECT
+    TO anon, authenticated
+    USING (true);
+
+
+-- recipe_steps catalogue
+ALTER TABLE public.recipe_steps ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Anyone can read recipe steps"
+    ON public.recipe_steps FOR SELECT
+    TO anon, authenticated
+    USING (true);
 
 
 -- ============================================================

@@ -1,20 +1,17 @@
 """
-Recipe Service — Meal recommendation generation and ingredient matching.
+Recipe Service — Meal recommendation and recipe catalogue queries.
 
-Provides intelligent recipe recommendations using Claude Text API with
-ingredient matching percentages and expiration prioritization.
-
-Async-first implementation with proper error handling and logging.
-
-Validates: Requirements 4.5, 4.6, 4.7, 4.8
+Indian recipes are served from Supabase tables. Continental recipes that are not
+owned in the local catalogue continue to use Spoonacular.
 """
 
 import httpx
 import os
-import json
 import logging
-from datetime import date
+import re
+from datetime import datetime
 from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
 from app.clients import claude_client
 from app.database import PantryRepository
 from app import guardrails
@@ -23,7 +20,313 @@ logger = logging.getLogger(__name__)
 
 # In-memory provider failure flags
 _spoonacular_failed = False
-_edamam_failed = False
+
+
+class RecipeIngredientModel(BaseModel):
+    id: str
+    recipe_id: str
+    name: str
+    quantity: str | float | int | None = None
+    is_optional: bool = False
+    sort_order: int = 0
+    available: bool = False
+
+
+class RecipeStepModel(BaseModel):
+    id: str
+    recipe_id: str
+    step_number: int
+    instruction: str
+    duration_min: int | None = None
+    tip: str | None = None
+
+
+class RecipeModel(BaseModel):
+    id: str
+    title: str
+    cuisine: str | None = None
+    meal_type: str | None = None
+    diet: str | None = None
+    ready_in_min: int | None = None
+    servings: int | None = None
+    image_url: str | None = None
+    description: str | None = None
+    calories_kcal: int | None = None
+    protein_g: float | None = None
+    carbs_g: float | None = None
+    fat_g: float | None = None
+    fiber_g: float | None = None
+    created_at: datetime | str | None = None
+    ingredients: list[RecipeIngredientModel] = Field(default_factory=list)
+    cooking_steps: list[RecipeStepModel] = Field(default_factory=list)
+    match_percentage: float = 0.0
+    missing_ingredients: list[str] = Field(default_factory=list)
+    uses_expiring_items: bool = False
+
+
+def _supabase_rest_config() -> tuple[str, str]:
+    url = os.getenv("SUPABASE_URL", "").rstrip("/")
+    key = os.getenv("SUPABASE_SERVICE_KEY", "")
+    if not url or not key:
+        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_KEY are not configured")
+    return url, key
+
+
+async def _supabase_get(table: str, params: dict[str, Any]) -> list[dict[str, Any]]:
+    supabase_url, service_key = _supabase_rest_config()
+    headers = {
+        "apikey": service_key,
+        "Authorization": f"Bearer {service_key}",
+        "Accept": "application/json",
+    }
+    async with httpx.AsyncClient(timeout=10) as client:
+        response = await client.get(
+            f"{supabase_url}/rest/v1/{table}",
+            params=params,
+            headers=headers,
+        )
+        response.raise_for_status()
+        return response.json()
+
+
+def _is_indian_cuisine(cuisine: str | None) -> bool:
+    return (cuisine or "").strip().lower().replace("_", " ") in {
+        "indian",
+        "south indian",
+        "north indian",
+        "pan indian",
+        "punjabi",
+        "bengali",
+        "gujarati",
+        "maharashtrian",
+    }
+
+
+def _normalise_name(value: str) -> str:
+    value = re.sub(r"\([^)]*\)", " ", value.lower())
+    value = re.sub(r"[^a-z0-9]+", " ", value)
+    return " ".join(value.split())
+
+
+def _ingredient_matches(recipe_ingredient: str, pantry_ingredient: str) -> bool:
+    recipe_name = _normalise_name(recipe_ingredient)
+    pantry_name = _normalise_name(pantry_ingredient)
+    if not recipe_name or not pantry_name:
+        return False
+    return recipe_name == pantry_name or recipe_name in pantry_name or pantry_name in recipe_name
+
+
+def _pantry_names(pantry_items: list[dict[str, Any]]) -> set[str]:
+    return {_normalise_name(item.get("name", "")) for item in pantry_items if item.get("name")}
+
+
+def _compute_match(
+    ingredients: list[dict[str, Any]],
+    pantry_names: set[str],
+) -> tuple[float, list[str], list[dict[str, Any]]]:
+    if not ingredients:
+        return 0.0, [], []
+
+    available_count = 0
+    missing: list[str] = []
+    enriched: list[dict[str, Any]] = []
+
+    for ingredient in ingredients:
+        name = ingredient.get("name", "")
+        normalised_name = _normalise_name(name)
+        available = any(_ingredient_matches(name, pantry_name) for pantry_name in pantry_names)
+        if available:
+            available_count += 1
+        elif not ingredient.get("is_optional"):
+            missing.append(normalised_name)
+        enriched.append({**ingredient, "available": available})
+
+    required_count = sum(1 for ingredient in ingredients if not ingredient.get("is_optional")) or len(ingredients)
+    required_available = sum(
+        1
+        for ingredient in enriched
+        if ingredient.get("available") and not ingredient.get("is_optional")
+    )
+    match_pct = round(required_available / required_count * 100, 2) if required_count else 0.0
+    return match_pct, missing, enriched
+
+
+def _uses_expiring(recipe: dict[str, Any], pantry_items: list[dict[str, Any]]) -> bool:
+    expiring_names = {
+        _normalise_name(item.get("name", ""))
+        for item in pantry_items
+        if item.get("isExpiring") or item.get("isExpired")
+    }
+    ingredient_names = {
+        ingredient.get("name", "")
+        for ingredient in recipe.get("ingredients", [])
+    }
+    return any(
+        _ingredient_matches(recipe_name, pantry_name)
+        for recipe_name in ingredient_names
+        for pantry_name in expiring_names
+    )
+
+
+def _to_api_recipe(recipe: RecipeModel, source: str = "supabase") -> dict[str, Any]:
+    ingredients = [ingredient.model_dump() for ingredient in recipe.ingredients]
+    cooking_steps = [step.model_dump() for step in recipe.cooking_steps]
+    steps = [step["instruction"] for step in cooking_steps]
+    ready_in_min = recipe.ready_in_min or 0
+    return {
+        "id": recipe.id,
+        "title": recipe.title,
+        "name": recipe.title,
+        "cuisine": recipe.cuisine,
+        "meal_type": recipe.meal_type,
+        "mealType": recipe.meal_type,
+        "diet": recipe.diet,
+        "ready_in_min": ready_in_min,
+        "readyInMin": ready_in_min,
+        "prepTimeMinutes": ready_in_min,
+        "servings": recipe.servings,
+        "image_url": recipe.image_url,
+        "imageUrl": recipe.image_url,
+        "image": recipe.image_url,
+        "description": recipe.description,
+        "calories_kcal": recipe.calories_kcal,
+        "caloriesKcal": recipe.calories_kcal,
+        "protein_g": recipe.protein_g,
+        "proteinG": recipe.protein_g,
+        "carbs_g": recipe.carbs_g,
+        "carbsG": recipe.carbs_g,
+        "fat_g": recipe.fat_g,
+        "fatG": recipe.fat_g,
+        "fiber_g": recipe.fiber_g,
+        "fiberG": recipe.fiber_g,
+        "created_at": recipe.created_at,
+        "ingredients": ingredients,
+        "recipeIngredients": ingredients,
+        "cooking_steps": cooking_steps,
+        "cookingSteps": cooking_steps,
+        "steps": steps,
+        "matchPercentage": recipe.match_percentage,
+        "match_percentage": recipe.match_percentage,
+        "missingIngredients": recipe.missing_ingredients,
+        "missing_ingredients": recipe.missing_ingredients,
+        "usesExpiringItems": recipe.uses_expiring_items,
+        "uses_expiring_items": recipe.uses_expiring_items,
+        "source": source,
+    }
+
+
+async def get_recipe_ingredients(recipe_id: str, pantry_names: set[str] | None = None) -> list[dict[str, Any]]:
+    rows = await _supabase_get(
+        "recipe_ingredients",
+        {
+            "select": "id,recipe_id,name,quantity,is_optional,sort_order",
+            "recipe_id": f"eq.{recipe_id}",
+            "order": "sort_order.asc,name.asc",
+        },
+    )
+    pantry_names = pantry_names or set()
+    return [
+        {
+            **row,
+            "quantity": row.get("quantity") if row.get("quantity") is not None else "",
+            "unit": "",
+            "available": _normalise_name(row.get("name", "")) in pantry_names,
+        }
+        for row in rows
+    ]
+
+
+async def get_recipe_steps(recipe_id: str) -> list[dict[str, Any]]:
+    return await _supabase_get(
+        "recipe_steps",
+        {
+            "select": "id,recipe_id,step_number,instruction,duration_min,tip",
+            "recipe_id": f"eq.{recipe_id}",
+            "order": "step_number.asc",
+        },
+    )
+
+
+async def get_recipe(recipe_id: str, pantry_items: list[dict[str, Any]] | None = None) -> dict[str, Any] | None:
+    rows = await _supabase_get(
+        "recipes",
+        {
+            "select": "id,title,cuisine,meal_type,diet,ready_in_min,servings,image_url,description,calories_kcal,protein_g,carbs_g,fat_g,fiber_g,created_at",
+            "id": f"eq.{recipe_id}",
+            "limit": 1,
+        },
+    )
+    if not rows:
+        return None
+
+    pantry_items = pantry_items or []
+    names = _pantry_names(pantry_items)
+    ingredient_rows = await get_recipe_ingredients(recipe_id, names)
+    step_rows = await get_recipe_steps(recipe_id)
+    match_pct, missing, enriched_ingredients = _compute_match(ingredient_rows, names)
+    recipe = RecipeModel(
+        **rows[0],
+        ingredients=enriched_ingredients,
+        cooking_steps=step_rows,
+        match_percentage=match_pct,
+        missing_ingredients=missing,
+        uses_expiring_items=_uses_expiring({"ingredients": enriched_ingredients}, pantry_items),
+    )
+    return _to_api_recipe(recipe)
+
+
+async def search_recipes(
+    filters: dict[str, Any] | None = None,
+    pantry_items: list[dict[str, Any]] | None = None,
+    limit: int = 10,
+) -> list[dict[str, Any]]:
+    filters = filters or {}
+    params: dict[str, Any] = {
+        "select": "id,title,cuisine,meal_type,diet,ready_in_min,servings,image_url,description,calories_kcal,protein_g,carbs_g,fat_g,fiber_g,created_at",
+        "order": "ready_in_min.asc,title.asc",
+        "limit": limit,
+    }
+
+    cuisine = filters.get("cuisine")
+    if cuisine and cuisine != "any":
+        cuisine_value = str(cuisine).strip()
+        if cuisine_value.lower() == "indian":
+            params["cuisine"] = 'in.("South Indian","North Indian","Pan Indian")'
+        else:
+            params["cuisine"] = f"eq.{cuisine_value}"
+    meal_type = filters.get("meal_type")
+    if meal_type and meal_type != "any":
+        params["meal_type"] = f"ilike.{meal_type}"
+    diet = filters.get("diet")
+    if diet and diet != "any":
+        params["diet"] = f"ilike.{diet}"
+    max_ready_time = filters.get("max_ready_time")
+    if max_ready_time:
+        params["ready_in_min"] = f"lte.{int(max_ready_time)}"
+    query = filters.get("query")
+    if query:
+        params["title"] = f"ilike.*{query}*"
+
+    rows = await _supabase_get("recipes", params)
+    pantry_items = pantry_items or []
+    names = _pantry_names(pantry_items)
+    recipes: list[dict[str, Any]] = []
+    for row in rows:
+        recipe_id = row["id"]
+        ingredients = await get_recipe_ingredients(recipe_id, names)
+        steps = await get_recipe_steps(recipe_id)
+        match_pct, missing, enriched_ingredients = _compute_match(ingredients, names)
+        recipe = RecipeModel(
+            **row,
+            ingredients=enriched_ingredients,
+            cooking_steps=steps,
+            match_percentage=match_pct,
+            missing_ingredients=missing,
+            uses_expiring_items=_uses_expiring({"ingredients": enriched_ingredients}, pantry_items),
+        )
+        recipes.append(_to_api_recipe(recipe))
+
+    return recipes
 
 
 class RecipeService:
@@ -33,7 +336,7 @@ class RecipeService:
     Provides async-first methods for recipe generation with ingredient
     matching percentages and expiration-aware prioritization.
     
-    Implements 3-tier failover: Spoonacular → Edamam → Claude
+    Legacy Claude recommendation path retained for tests and non-catalogue flows.
     """
     
     def __init__(self, repository: PantryRepository):
@@ -69,7 +372,7 @@ class RecipeService:
             Dictionary with:
             - success (bool): Whether recommendations were found
             - recipes (List[Dict]): Generated recipes with matching percentages
-            - provider (str): Which provider was used (spoonacular/edamam/claude)
+            - provider (str): Which provider was used
             - message (str): Result message
         
         Validates: Requirements 4.5, 4.6, 4.7, 4.8
@@ -202,9 +505,8 @@ class RecipeService:
 
 def _reset_provider_status():
     """Reset provider failure flags (for testing/recovery)."""
-    global _spoonacular_failed, _edamam_failed
+    global _spoonacular_failed
     _spoonacular_failed = False
-    _edamam_failed = False
 
 
 async def get_recipes(
@@ -212,6 +514,9 @@ async def get_recipes(
     prioritize_expiring: bool = True,
     max_recipes: int = 5,
     cuisine: str = "any",
+    meal_type: str | None = None,
+    diet: str | None = None,
+    max_ready_time: int | None = None,
 ) -> dict:
     """
     Wrapper function for use in FastAPI routes.
@@ -227,28 +532,39 @@ async def get_recipes(
     Returns:
         Dict with success, recipes, provider, message
     """
-    service = RecipeService(repository=None)  # We don't need repo in get_recommendations
     pantry_names = {item.get("name", "").lower().strip() for item in pantry_items}
-    
-    # Try 3-tier failover
-    recipes = await _try_spoonacular(pantry_items, pantry_names, prioritize_expiring, max_recipes)
-    
-    if recipes is None:
-        recipes = await _try_edamam(pantry_items, pantry_names, prioritize_expiring, max_recipes)
-    
-    if recipes is None:
-        # Fall back to Claude
-        recipes = await claude_client.get_recipe_recommendations(
-            pantry_items=pantry_items,
-            prioritize_expiring=prioritize_expiring,
-            max_recipes=max_recipes,
+    cuisine_value = (cuisine or "any").strip()
+    filters = {
+        "cuisine": cuisine_value if cuisine_value != "any" else None,
+        "meal_type": meal_type,
+        "diet": diet,
+        "max_ready_time": max_ready_time,
+    }
+
+    recipes: list[dict] | None = None
+    provider = "supabase"
+
+    if cuisine_value.lower() in {"italian", "mexican"}:
+        recipes = await _try_spoonacular(
+            pantry_items,
+            pantry_names,
+            prioritize_expiring,
+            max_recipes,
+            cuisine_value,
         )
+        provider = "spoonacular"
+    else:
+        try:
+            recipes = await search_recipes(filters, pantry_items, max_recipes)
+        except Exception as exc:
+            logger.error("Supabase recipe lookup failed: %s", exc)
+            recipes = []
     
     if not recipes:
         return {
             "success": False,
             "recipes": [],
-            "provider": "claude",
+            "provider": provider,
             "message": "Could not generate recipes with your current pantry.",
         }
     
@@ -258,24 +574,18 @@ async def get_recipes(
     return {
         "success": True,
         "recipes": recipes[:max_recipes],
-        "provider": get_provider_status()["active"],
+        "provider": provider,
         "message": f"Found {len(recipes)} recipe(s) for your pantry.",
     }
 
 
 def get_provider_status() -> dict:
     """Get current provider status."""
-    if not _spoonacular_failed:
-        active = "spoonacular"
-    elif not _edamam_failed:
-        active = "edamam"
-    else:
-        active = "claude"
+    active = "supabase+spoonacular" if not _spoonacular_failed else "supabase"
     return {
         "active": active,
+        "supabase": "ok",
         "spoonacular": "failed" if _spoonacular_failed else "ok",
-        "edamam": "failed" if _edamam_failed else "ok",
-        "claude": "ok",  # Claude is always the fallback
     }
 
 
@@ -296,47 +606,58 @@ def _normalise_spoonacular(raw: dict, pantry_names: set) -> dict:
     match_pct = (
         round(available_count / len(ingredients) * 100) if ingredients else 0
     )
+    nutrients = {
+        nutrient.get("name", "").lower(): nutrient.get("amount")
+        for nutrient in raw.get("nutrition", {}).get("nutrients", [])
+    }
+    steps = [
+        {
+            "id": f"{raw.get('id', '')}-{s.get('number', index + 1)}",
+            "recipe_id": str(raw.get("id", "")),
+            "step_number": s.get("number", index + 1),
+            "instruction": s.get("step", ""),
+            "duration_min": None,
+            "tip": None,
+        }
+        for inst in raw.get("analyzedInstructions", [])
+        for index, s in enumerate(inst.get("steps", []))
+    ]
+    dish_types = raw.get("dishTypes") or []
     return {
         "id": str(raw.get("id", "")),
+        "title": raw.get("title", ""),
         "name": raw.get("title", ""),
         "cuisine": (raw.get("cuisines") or [""])[0],
-        "difficulty": "Medium",
+        "meal_type": dish_types[0] if dish_types else None,
+        "mealType": dish_types[0] if dish_types else None,
+        "diet": (raw.get("diets") or [None])[0],
+        "ready_in_min": raw.get("readyInMinutes", 30),
+        "readyInMin": raw.get("readyInMinutes", 30),
         "prepTimeMinutes": raw.get("readyInMinutes", 30),
+        "servings": raw.get("servings", 2),
+        "image_url": raw.get("image", ""),
+        "imageUrl": raw.get("image", ""),
+        "image": raw.get("image", ""),
+        "description": raw.get("summary", ""),
+        "calories_kcal": nutrients.get("calories"),
+        "caloriesKcal": nutrients.get("calories"),
+        "protein_g": nutrients.get("protein"),
+        "proteinG": nutrients.get("protein"),
+        "carbs_g": nutrients.get("carbohydrates"),
+        "carbsG": nutrients.get("carbohydrates"),
+        "fat_g": nutrients.get("fat"),
+        "fatG": nutrients.get("fat"),
+        "fiber_g": nutrients.get("fiber"),
+        "fiberG": nutrients.get("fiber"),
         "matchPercentage": match_pct,
         "usesExpiringItems": False,
         "ingredients": ingredients,
+        "recipeIngredients": ingredients,
         "missingIngredients": [i["name"] for i in ingredients if not i["available"]],
-        "steps": [
-            s.get("step", "")
-            for s in (raw.get("analyzedInstructions") or [{"steps": []}])[0].get("steps", [])
-        ],
-    }
-
-
-def _normalise_edamam(raw: dict, pantry_names: set) -> dict:
-    """Normalise an Edamam recipe into the shared Recipe shape."""
-    recipe = raw.get("recipe", {})
-    ingredients = []
-    for line in recipe.get("ingredientLines", []):
-        name = line.lower().strip()
-        ingredients.append(
-            {"name": name, "quantity": 1, "unit": "pcs", "available": name in pantry_names}
-        )
-    available_count = sum(1 for i in ingredients if i["available"])
-    match_pct = (
-        round(available_count / len(ingredients) * 100) if ingredients else 0
-    )
-    return {
-        "id": recipe.get("uri", "").split("#recipe_")[-1],
-        "name": recipe.get("label", ""),
-        "cuisine": (recipe.get("cuisineType") or [""])[0].title(),
-        "difficulty": "Medium",
-        "prepTimeMinutes": recipe.get("totalTime", 30),
-        "matchPercentage": match_pct,
-        "usesExpiringItems": False,
-        "ingredients": ingredients,
-        "missingIngredients": [i["name"] for i in ingredients if not i["available"]],
-        "steps": ["Visit the recipe link for step-by-step instructions."],
+        "cooking_steps": steps,
+        "cookingSteps": steps,
+        "steps": [step["instruction"] for step in steps],
+        "source": "spoonacular",
     }
 
 
@@ -345,6 +666,7 @@ async def _try_spoonacular(
     pantry_names: set,
     prioritize_expiring: bool,
     max_recipes: int,
+    cuisine: str,
 ) -> list[dict] | None:
     global _spoonacular_failed
     api_key = os.getenv("SPOONACULAR_API_KEY")
@@ -352,76 +674,97 @@ async def _try_spoonacular(
         _spoonacular_failed = True
         return None
 
-    ingredients_csv = ",".join(i["name"] for i in pantry_items)
-    url = "https://api.spoonacular.com/recipes/findByIngredients"
+    ingredients_csv = ",".join(i["name"] for i in pantry_items[:10])
+    url = "https://api.spoonacular.com/recipes/complexSearch"
     params = {
         "apiKey": api_key,
-        "ingredients": ingredients_csv,
+        "includeIngredients": ingredients_csv,
+        "cuisine": cuisine,
         "number": max_recipes,
-        "ranking": 1,  # maximize used ingredients
-        "ignorePantry": False,
+        "addRecipeInformation": True,
+        "addRecipeNutrition": True,
+        "instructionsRequired": True,
     }
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.get(url, params=params)
             if resp.status_code == 402:
-                logger.warning("Spoonacular quota exhausted — switching to Edamam")
+                logger.warning("Spoonacular quota exhausted")
                 _spoonacular_failed = True
                 return None
             resp.raise_for_status()
-            recipes_raw = resp.json()
-            # Fetch full recipe details for each result
-            results = []
-            for r in recipes_raw[:max_recipes]:
-                detail_resp = await client.get(
-                    f"https://api.spoonacular.com/recipes/{r['id']}/information",
-                    params={"apiKey": api_key, "includeNutrition": False},
-                )
-                if detail_resp.status_code == 200:
-                    results.append(_normalise_spoonacular(detail_resp.json(), pantry_names))
+            recipes_raw = resp.json().get("results", [])
+            results = [_normalise_spoonacular(recipe, pantry_names) for recipe in recipes_raw[:max_recipes]]
             return results if results else None
     except Exception as e:
-        logger.warning(f"Spoonacular error: {e} — switching to Edamam")
+        logger.warning("Spoonacular error: %s", e)
         _spoonacular_failed = True
         return None
 
 
-async def _try_edamam(
-    pantry_items: list[dict],
-    pantry_names: set,
-    prioritize_expiring: bool,
-    max_recipes: int,
-) -> list[dict] | None:
-    global _edamam_failed
-    app_id = os.getenv("EDAMAM_APP_ID")
-    app_key = os.getenv("EDAMAM_APP_KEY")
-    if not app_id or not app_key:
-        _edamam_failed = True
+async def search_continental_recipe(query: str, pantry_items: list[dict] | None = None) -> dict[str, Any] | None:
+    """Search Spoonacular for one Italian/Mexican recipe by title."""
+    global _spoonacular_failed
+    api_key = os.getenv("SPOONACULAR_API_KEY")
+    if not api_key:
+        _spoonacular_failed = True
         return None
 
-    query = " ".join(i["name"] for i in pantry_items[:5])  # Edamam query string
-    url = "https://api.edamam.com/api/recipes/v2"
+    pantry_names = _pantry_names(pantry_items or [])
     params = {
-        "type": "public",
-        "q": query,
-        "app_id": app_id,
-        "app_key": app_key,
-        "random": "true",
-        "field": ["label", "cuisineType", "totalTime", "ingredientLines", "uri"],
+        "apiKey": api_key,
+        "query": query,
+        "cuisine": "Italian,Mexican",
+        "number": 1,
+        "addRecipeInformation": True,
+        "addRecipeNutrition": True,
+        "instructionsRequired": True,
     }
     try:
         async with httpx.AsyncClient(timeout=10) as client:
-            resp = await client.get(url, params=params)
-            if resp.status_code == 429:
-                logger.warning("Edamam rate-limited — switching to Claude")
-                _edamam_failed = True
+            response = await client.get(
+                "https://api.spoonacular.com/recipes/complexSearch",
+                params=params,
+            )
+            if response.status_code == 402:
+                _spoonacular_failed = True
                 return None
-            resp.raise_for_status()
-            hits = resp.json().get("hits", [])[:max_recipes]
-            return [_normalise_edamam(h, pantry_names) for h in hits] if hits else None
-    except Exception as e:
-        logger.warning(f"Edamam error: {e} — switching to Claude")
-        _edamam_failed = True
+            response.raise_for_status()
+            results = response.json().get("results", [])
+            return _normalise_spoonacular(results[0], pantry_names) if results else None
+    except Exception as exc:
+        logger.warning("Spoonacular title search failed: %s", exc)
+        _spoonacular_failed = True
+        return None
+
+
+async def get_continental_recipe(recipe_id: str, pantry_items: list[dict] | None = None) -> dict[str, Any] | None:
+    """Load full Spoonacular details for one continental recipe id."""
+    global _spoonacular_failed
+    api_key = os.getenv("SPOONACULAR_API_KEY")
+    if not api_key:
+        _spoonacular_failed = True
+        return None
+
+    pantry_names = _pantry_names(pantry_items or [])
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            response = await client.get(
+                f"https://api.spoonacular.com/recipes/{recipe_id}/information",
+                params={"apiKey": api_key, "includeNutrition": True},
+            )
+            if response.status_code == 404:
+                return None
+            if response.status_code == 402:
+                _spoonacular_failed = True
+                return None
+            response.raise_for_status()
+            recipe = _normalise_spoonacular(response.json(), pantry_names)
+            cuisine = (recipe.get("cuisine") or "").lower()
+            return recipe if cuisine in {"italian", "mexican"} else None
+    except Exception as exc:
+        logger.warning("Spoonacular recipe detail failed: %s", exc)
+        _spoonacular_failed = True
         return None
 
 

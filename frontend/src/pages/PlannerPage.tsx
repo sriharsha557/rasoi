@@ -46,13 +46,13 @@ export default function PlannerPage() {
       const response = await apiClient.getRecipeByName(mealName);
       const recipe = response.recipes[0];
       if (!recipe) {
-        setError('Recipe was not found in Spoonacular.');
+        setError('Recipe was not found in the recipe catalogue.');
         return;
       }
       dispatch({ type: 'SELECT_RECIPE', payload: recipe });
       navigate('/recipe');
     } catch {
-      setError('Could not load this recipe from Spoonacular. Check the backend API key and quota.');
+      setError('Could not load this recipe. Check the backend recipe providers.');
     } finally {
       setLoadingMealName(null);
     }

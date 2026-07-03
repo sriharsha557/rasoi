@@ -2,14 +2,17 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { usePantry } from '../context/PantryContext';
 import { useRecipe } from '../context/RecipeContext';
-import apiClient from '../services/apiClient';
+import recipeService from '../services/recipeService';
 import type { Recipe } from '../types';
 
-type Cuisine = 'any' | 'Indian' | 'Italian' | 'Mexican' | 'Quick';
+type Cuisine = 'any' | 'Indian' | 'South Indian' | 'North Indian' | 'Pan Indian' | 'Italian' | 'Mexican' | 'Quick';
 
 const CUISINE_CHIPS: { label: string; value: Cuisine; emoji: string }[] = [
   { label: 'All', value: 'any', emoji: '🍽️' },
   { label: 'Indian', value: 'Indian', emoji: '🍛' },
+  { label: 'South Indian', value: 'South Indian', emoji: '🥥' },
+  { label: 'North Indian', value: 'North Indian', emoji: '🫓' },
+  { label: 'Pan Indian', value: 'Pan Indian', emoji: '🥘' },
   { label: 'Italian', value: 'Italian', emoji: '🍝' },
   { label: 'Mexican', value: 'Mexican', emoji: '🌮' },
   { label: 'Quick (<20 min)', value: 'Quick', emoji: '⚡' },
@@ -21,24 +24,33 @@ export default function MealsPage() {
   const { state: recipeState, dispatch } = useRecipe();
   const [prioritizeExpiry, setPrioritizeExpiry] = useState(true);
   const [cuisine, setCuisine] = useState<Cuisine>('any');
+  const [mealType, setMealType] = useState('any');
+  const [diet, setDiet] = useState('any');
+  const [maxReadyTime, setMaxReadyTime] = useState<number | undefined>(undefined);
+  const [error, setError] = useState<string | null>(null);
 
   const { recipes, isLoading } = recipeState;
 
   useEffect(() => {
     window.scrollTo(0, 0);
     dispatch({ type: 'SET_LOADING', payload: true });
-    apiClient
-      .getRecipes(prioritizeExpiry, 6, cuisine === 'Quick' ? 'any' : cuisine)
+    setError(null);
+    recipeService
+      .searchRecipes({
+        cuisine: cuisine === 'Quick' ? 'any' : cuisine,
+        mealType: mealType === 'any' ? undefined : mealType,
+        diet: diet === 'any' ? undefined : diet,
+        maxReadyTime: cuisine === 'Quick' ? 20 : maxReadyTime,
+      }, 6)
       .then((res) => {
-        let filtered = res.recipes;
-        // For Quick, filter client-side on prep time <= 20 min
-        if (cuisine === 'Quick') {
-          filtered = filtered.filter((r) => r.prepTimeMinutes <= 20);
-        }
-        dispatch({ type: 'SET_RECIPES', payload: filtered });
+        dispatch({ type: 'SET_RECIPES', payload: res.recipes });
       })
-      .catch(() => dispatch({ type: 'SET_LOADING', payload: false }));
-  }, [dispatch, prioritizeExpiry, cuisine]);
+      .catch(() => {
+        setError('Could not load recipes. Check that the backend and Supabase are configured.');
+        dispatch({ type: 'SET_RECIPES', payload: [] });
+      })
+      .finally(() => dispatch({ type: 'SET_LOADING', payload: false }));
+  }, [dispatch, prioritizeExpiry, cuisine, mealType, diet, maxReadyTime]);
 
   const handleToggle = () => {
     setPrioritizeExpiry((current) => !current);
@@ -102,6 +114,57 @@ export default function MealsPage() {
           ))}
         </div>
 
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-6">
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+            Meal type
+            <select
+              value={mealType}
+              onChange={(event) => setMealType(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm normal-case tracking-normal text-gray-800 focus:outline-none focus:ring-2 focus:ring-rasoi/30"
+            >
+              <option value="any">Any</option>
+              <option value="breakfast">Breakfast</option>
+              <option value="lunch">Lunch</option>
+              <option value="dinner">Dinner</option>
+              <option value="snack">Snack</option>
+            </select>
+          </label>
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+            Diet
+            <select
+              value={diet}
+              onChange={(event) => setDiet(event.target.value)}
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm normal-case tracking-normal text-gray-800 focus:outline-none focus:ring-2 focus:ring-rasoi/30"
+            >
+              <option value="any">Any</option>
+              <option value="vegetarian">Vegetarian</option>
+              <option value="vegan">Vegan</option>
+              <option value="high protein">High protein</option>
+              <option value="gluten free">Gluten free</option>
+            </select>
+          </label>
+          <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">
+            Cooking time
+            <select
+              value={maxReadyTime ?? 'any'}
+              onChange={(event) => setMaxReadyTime(event.target.value === 'any' ? undefined : Number(event.target.value))}
+              className="mt-1 w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm normal-case tracking-normal text-gray-800 focus:outline-none focus:ring-2 focus:ring-rasoi/30"
+            >
+              <option value="any">Any</option>
+              <option value="20">Under 20 min</option>
+              <option value="30">Under 30 min</option>
+              <option value="45">Under 45 min</option>
+              <option value="60">Under 60 min</option>
+            </select>
+          </label>
+        </div>
+
+        {error && (
+          <div className="mb-6 rounded-card border border-rasoi-red bg-rasoi-red-light px-4 py-3 text-sm font-semibold text-rasoi-red">
+            {error}
+          </div>
+        )}
+
         {/* Loading skeletons */}
         {isLoading && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -152,8 +215,21 @@ function RecipeCard({ recipe, onSelect }: { recipe: Recipe; onSelect: () => void
       ? 'bg-rasoi-amber text-white'
       : 'bg-gray-200 text-gray-700';
 
+  const imageUrl = recipe.imageUrl ?? recipe.image_url ?? recipe.image;
+  const title = recipe.title ?? recipe.name;
+  const mealType = recipe.mealType ?? recipe.meal_type;
+  const calories = recipe.caloriesKcal ?? recipe.calories_kcal;
+
   return (
-    <div className="bg-white rounded-card shadow-card hover:shadow-card-hover transition-all hover:-translate-y-0.5 p-5 flex flex-col gap-3">
+    <div className="bg-white rounded-card shadow-card hover:shadow-card-hover transition-all hover:-translate-y-0.5 overflow-hidden flex flex-col">
+      <div className="aspect-[4/3] bg-rasoi-panel overflow-hidden">
+        {imageUrl ? (
+          <img src={imageUrl} alt={title} className="h-full w-full object-cover" loading="lazy" />
+        ) : (
+          <div className="h-full w-full grid place-items-center text-4xl">🍽️</div>
+        )}
+      </div>
+      <div className="p-5 flex flex-col gap-3 flex-1">
       {/* Top row: expiry badge + match % */}
       <div className="flex items-center justify-between">
         {recipe.usesExpiringItems ? (
@@ -169,7 +245,7 @@ function RecipeCard({ recipe, onSelect }: { recipe: Recipe; onSelect: () => void
       </div>
 
       {/* Name */}
-      <h3 className="text-lg font-extrabold text-gray-900 leading-tight">{recipe.name}</h3>
+      <h3 className="text-lg font-extrabold text-gray-900 leading-tight">{title}</h3>
 
       {/* Meta pills */}
       <div className="flex flex-wrap gap-1.5">
@@ -178,14 +254,24 @@ function RecipeCard({ recipe, onSelect }: { recipe: Recipe; onSelect: () => void
             🌍 {recipe.cuisine}
           </span>
         )}
-        {recipe.difficulty && (
+        {mealType && (
           <span className="text-xs bg-rasoi-panel text-gray-600 px-2.5 py-1 rounded-full font-medium">
-            {recipe.difficulty === 'Easy' ? '🟢' : recipe.difficulty === 'Medium' ? '🟡' : '🔴'} {recipe.difficulty}
+            {mealType}
+          </span>
+        )}
+        {recipe.diet && (
+          <span className="text-xs bg-rasoi-panel text-gray-600 px-2.5 py-1 rounded-full font-medium">
+            {recipe.diet}
           </span>
         )}
         <span className="text-xs bg-rasoi-panel text-gray-600 px-2.5 py-1 rounded-full font-medium">
           ⏱ {recipe.prepTimeMinutes} min
         </span>
+        {calories !== null && calories !== undefined && (
+          <span className="text-xs bg-rasoi-panel text-gray-600 px-2.5 py-1 rounded-full font-medium">
+            {Math.round(calories)} kcal
+          </span>
+        )}
       </div>
 
       {/* Ingredient availability dots */}
@@ -216,6 +302,7 @@ function RecipeCard({ recipe, onSelect }: { recipe: Recipe; onSelect: () => void
       >
         View Recipe →
       </button>
+      </div>
     </div>
   );
 }

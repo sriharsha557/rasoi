@@ -16,6 +16,10 @@ import type {
   PantryItemResponse,
   DeleteResponse,
   RecipesResponse,
+  Recipe,
+  RecipeIngredient,
+  RecipeSearchFilters,
+  RecipeStep,
   SubstitutionsResponse,
   HealthCheckResponse,
   PantryItemUpdateRequest,
@@ -215,20 +219,56 @@ const apiClient = {
   getRecipes: async (
     prioritizeExpiring: boolean = true,
     maxRecipes: number = 5,
-    cuisine: string = 'any'
+    cuisine: string = 'any',
+    filters: RecipeSearchFilters = {}
   ): Promise<RecipesResponse> => {
     const response = await axiosInstance.get<RecipesResponse>('/recipes', {
       params: {
         prioritize_expiring: prioritizeExpiring,
         max_recipes: maxRecipes,
         cuisine,
+        meal_type: filters.mealType,
+        diet: filters.diet,
+        max_ready_time: filters.maxReadyTime,
       },
     });
     return response.data;
   },
 
   /**
-   * Search Spoonacular for a recipe by meal name and return full recipe details.
+   * Search recipes with cuisine, meal type, diet, and cooking-time filters.
+   *
+   * Endpoint: GET /api/recipes
+   */
+  searchRecipes: async (filters: RecipeSearchFilters = {}, maxRecipes: number = 12): Promise<RecipesResponse> => {
+    return apiClient.getRecipes(true, maxRecipes, filters.cuisine ?? 'any', filters);
+  },
+
+  /**
+   * Get one full recipe by id, including ingredients and ordered cooking steps.
+   *
+   * Endpoint: GET /api/recipe/{id}
+   */
+  getRecipe: async (id: string): Promise<Recipe> => {
+    const response = await axiosInstance.get<Recipe>(`/recipe/${id}`);
+    return response.data;
+  },
+
+  getRecipeIngredients: async (recipeId: string): Promise<RecipeIngredient[]> => {
+    const recipe = await apiClient.getRecipe(recipeId);
+    return recipe.recipeIngredients ?? recipe.ingredients;
+  },
+
+  getRecipeSteps: async (recipeId: string): Promise<RecipeStep[]> => {
+    const recipe = await apiClient.getRecipe(recipeId);
+    return recipe.cookingSteps ?? recipe.cooking_steps ?? recipe.steps.map((instruction, index) => ({
+      step_number: index + 1,
+      instruction,
+    }));
+  },
+
+  /**
+  * Search Supabase first, then Spoonacular for continental recipe details.
    *
    * Endpoint: GET /api/recipe/search
    */

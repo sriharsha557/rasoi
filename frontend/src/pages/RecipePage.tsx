@@ -1,12 +1,23 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { usePantry } from '../context/PantryContext';
 import { useRecipe } from '../context/RecipeContext';
 import apiClient from '../services/apiClient';
-import type { Substitution } from '../types';
+import recipeService from '../services/recipeService';
+import type { RecipeStep, Substitution } from '../types';
+
+function NutritionStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-rasoi-panel px-3 py-2">
+      <p className="text-[11px] font-bold uppercase tracking-wide text-gray-400">{label}</p>
+      <p className="text-sm font-extrabold text-gray-900">{value}</p>
+    </div>
+  );
+}
 
 export default function RecipePage() {
   const navigate = useNavigate();
+  const { id } = useParams();
   const { state: recipeState, dispatch } = useRecipe();
   const { state: pantryState, dispatch: pantryDispatch } = usePantry();
   const { currentRecipe, currentStep } = recipeState;
@@ -20,20 +31,34 @@ export default function RecipePage() {
   const [substitutions, setSubstitutions] = useState<Record<string, Substitution[]>>({});
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
   const [loadingSub, setLoadingSub] = useState<string | null>(null);
+  const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
+  const [recipeError, setRecipeError] = useState<string | null>(null);
 
   useEffect(() => {
     window.scrollTo(0, 0);
-    if (!currentRecipe) {
+    if (currentRecipe && (!id || currentRecipe.id === id)) {
+      setTimers(Array((currentRecipe.cookingSteps ?? currentRecipe.cooking_steps ?? currentRecipe.steps).length).fill(null));
+      setCompletedSteps(new Set());
+      return;
+    }
+
+    if (!id) {
       navigate('/meals');
       return;
     }
-    const timer = setTimeout(() => {
-      setTimers(Array(currentRecipe.steps.length).fill(null));
-      setCompletedSteps(new Set());
-    }, 0);
 
-    return () => clearTimeout(timer);
-  }, [currentRecipe, navigate]);
+    setIsLoadingRecipe(true);
+    setRecipeError(null);
+    recipeService
+      .getRecipe(id)
+      .then((recipe) => {
+        dispatch({ type: 'SELECT_RECIPE', payload: recipe });
+        setTimers(Array((recipe.cookingSteps ?? recipe.cooking_steps ?? recipe.steps).length).fill(null));
+        setCompletedSteps(new Set());
+      })
+      .catch(() => setRecipeError('Could not load this recipe. It may not exist in the recipe catalogue.'))
+      .finally(() => setIsLoadingRecipe(false));
+  }, [currentRecipe, dispatch, id, navigate]);
 
   // Countdown tick
   useEffect(() => {
@@ -53,9 +78,47 @@ export default function RecipePage() {
     return () => clearInterval(t);
   }, [runningStep]);
 
-  if (!currentRecipe) return null;
+  if (isLoadingRecipe) {
+    return (
+      <div className="min-h-screen bg-rasoi-panel pt-24 px-4">
+        <div className="max-w-4xl mx-auto rounded-card bg-white p-8 shadow-card text-center text-gray-600">
+          Loading recipe...
+        </div>
+      </div>
+    );
+  }
 
-  const steps = currentRecipe.steps;
+  if (!currentRecipe) {
+    return (
+      <div className="min-h-screen bg-rasoi-panel pt-24 px-4">
+        <div className="max-w-4xl mx-auto rounded-card bg-white p-8 shadow-card text-center">
+          <h1 className="text-xl font-extrabold text-gray-900 mb-2">Recipe unavailable</h1>
+          <p className="text-sm text-gray-500 mb-5">{recipeError ?? 'Choose a recipe from meals to continue.'}</p>
+          <button onClick={() => navigate('/meals')} className="px-5 py-2.5 bg-rasoi text-white font-bold rounded-pill">
+            Back to meals
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  const rawSteps: RecipeStep[] = currentRecipe.cookingSteps ?? currentRecipe.cooking_steps ?? currentRecipe.steps.map((instruction, index) => ({
+    step_number: index + 1,
+    instruction,
+  }));
+  const stepRows = rawSteps.slice().sort((a, b) => (a.stepNumber ?? a.step_number) - (b.stepNumber ?? b.step_number));
+  const steps = stepRows.map((step) => step.instruction);
+  const orderedIngredients = [...currentRecipe.ingredients].sort(
+    (a, b) => (a.sortOrder ?? a.sort_order ?? 0) - (b.sortOrder ?? b.sort_order ?? 0)
+  );
+  const title = currentRecipe.title ?? currentRecipe.name;
+  const imageUrl = currentRecipe.imageUrl ?? currentRecipe.image_url ?? currentRecipe.image;
+  const mealType = currentRecipe.mealType ?? currentRecipe.meal_type;
+  const calories = currentRecipe.caloriesKcal ?? currentRecipe.calories_kcal;
+  const protein = currentRecipe.proteinG ?? currentRecipe.protein_g;
+  const carbs = currentRecipe.carbsG ?? currentRecipe.carbs_g;
+  const fat = currentRecipe.fatG ?? currentRecipe.fat_g;
+  const fiber = currentRecipe.fiberG ?? currentRecipe.fiber_g;
   const allStepsDone = completedSteps.size === steps.length;
 
   const handleMarkCooked = async () => {
@@ -64,7 +127,7 @@ export default function RecipePage() {
       .map((ing) => ing.name);
     setMarkedCooked(true);
     try {
-      await apiClient.markCooked(usedNames, currentRecipe.name);
+      await apiClient.markCooked(usedNames, title);
       // Optimistically remove used items from pantry context
       usedNames.forEach((name) => {
         const item = pantryState.pantryItems.find(
@@ -146,26 +209,44 @@ export default function RecipePage() {
         </button>
 
         {/* Recipe header */}
-        <div className="bg-white rounded-card shadow-card p-6 mb-5">
-          <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="bg-white rounded-card shadow-card overflow-hidden mb-5">
+          {imageUrl && (
+            <img src={imageUrl} alt={title} className="h-64 w-full object-cover" />
+          )}
+          <div className="p-6 flex flex-wrap items-start justify-between gap-3">
             <div>
               <h1 className="text-2xl sm:text-3xl font-extrabold text-gray-900 mb-2">
-                {currentRecipe.name}
+                {title}
               </h1>
+              {currentRecipe.description && (
+                <p className="text-sm text-gray-600 leading-relaxed mb-3 max-w-2xl">
+                  {currentRecipe.description.replace(/<[^>]*>/g, '')}
+                </p>
+              )}
               <div className="flex flex-wrap gap-2">
                 {currentRecipe.cuisine && (
                   <span className="text-xs bg-rasoi-panel text-gray-600 px-2.5 py-1 rounded-full font-medium">
                     🌍 {currentRecipe.cuisine}
                   </span>
                 )}
-                {currentRecipe.difficulty && (
+                {mealType && (
                   <span className="text-xs bg-rasoi-panel text-gray-600 px-2.5 py-1 rounded-full font-medium">
-                    {currentRecipe.difficulty}
+                    {mealType}
+                  </span>
+                )}
+                {currentRecipe.diet && (
+                  <span className="text-xs bg-rasoi-panel text-gray-600 px-2.5 py-1 rounded-full font-medium">
+                    {currentRecipe.diet}
                   </span>
                 )}
                 <span className="text-xs bg-rasoi-panel text-gray-600 px-2.5 py-1 rounded-full font-medium">
                   ⏱ {currentRecipe.prepTimeMinutes} min
                 </span>
+                {currentRecipe.servings && (
+                  <span className="text-xs bg-rasoi-panel text-gray-600 px-2.5 py-1 rounded-full font-medium">
+                    Serves {currentRecipe.servings}
+                  </span>
+                )}
                 <span className={`text-xs font-extrabold px-2.5 py-1 rounded-full bg-rasoi-panel ${matchColor}`}>
                   {currentRecipe.matchPercentage}% match
                 </span>
@@ -177,6 +258,15 @@ export default function RecipePage() {
               </span>
             )}
           </div>
+          {[calories, protein, carbs, fat, fiber].some((value) => value !== null && value !== undefined) && (
+            <div className="border-t border-gray-100 px-6 py-4 grid grid-cols-2 sm:grid-cols-5 gap-3">
+              {calories !== null && calories !== undefined && <NutritionStat label="Calories" value={`${Math.round(calories)} kcal`} />}
+              {protein !== null && protein !== undefined && <NutritionStat label="Protein" value={`${protein} g`} />}
+              {carbs !== null && carbs !== undefined && <NutritionStat label="Carbs" value={`${carbs} g`} />}
+              {fat !== null && fat !== undefined && <NutritionStat label="Fat" value={`${fat} g`} />}
+              {fiber !== null && fiber !== undefined && <NutritionStat label="Fiber" value={`${fiber} g`} />}
+            </div>
+          )}
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-5 gap-5">
@@ -185,16 +275,20 @@ export default function RecipePage() {
             <div className="bg-white rounded-card shadow-card p-5">
               <h2 className="font-bold text-gray-900 text-base mb-4">Ingredients</h2>
               <ul className="space-y-2">
-                {currentRecipe.ingredients.map((ing, i) => (
+                {orderedIngredients.map((ing, i) => {
+                  const isOptional = ing.isOptional ?? ing.is_optional ?? false;
+                  return (
                   <li key={i} className="flex items-center gap-2.5">
                     <span className={`w-5 h-5 flex items-center justify-center rounded-full text-xs font-bold shrink-0 ${ing.available ? 'bg-rasoi-light text-rasoi-dark' : 'bg-rasoi-red-light text-rasoi-red'}`}>
-                      {ing.available ? '✓' : '✗'}
+                      {isOptional ? '•' : ing.available ? '✓' : '✗'}
                     </span>
                     <span className={`text-sm ${ing.available ? 'text-gray-800' : 'text-gray-400 line-through'}`}>
-                      {ing.quantity} {ing.unit} {ing.name}
+                      {ing.quantity} {ing.unit ?? ''} {ing.name}
+                      {isOptional && <span className="ml-1 text-xs font-semibold text-gray-400 no-underline">optional</span>}
                     </span>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
 
               {/* Missing ingredients + substitution banners */}
@@ -242,9 +336,10 @@ export default function RecipePage() {
                 {completedSteps.size}/{steps.length} done
               </span>
             </h2>
-            {steps.map((step, i) => {
+            {stepRows.map((step, i) => {
               const done = completedSteps.has(i);
               const timerVal = timers[i];
+              const duration = step.durationMin ?? step.duration_min;
               return (
                 <div
                   key={i}
@@ -259,8 +354,9 @@ export default function RecipePage() {
                     </button>
                     <div className="flex-1">
                       <p className={`text-sm leading-relaxed ${done ? 'line-through text-gray-400' : 'text-gray-800'}`}>
-                        {step}
+                        {step.instruction}
                       </p>
+                      {step.tip && <p className="mt-1 text-xs italic text-gray-400">Tip: {step.tip}</p>}
 
                       {/* Timer controls */}
                       {!done && (
@@ -276,7 +372,7 @@ export default function RecipePage() {
                             </>
                           ) : (
                             <div className="flex gap-2">
-                              {[60, 120, 300].map((secs) => (
+                              {Array.from(new Set([duration ? duration * 60 : 60, 120, 300])).map((secs) => (
                                 <button
                                   key={secs}
                                   onClick={() => startTimer(i, secs)}
