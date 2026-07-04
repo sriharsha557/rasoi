@@ -446,3 +446,27 @@ export interface BuyingPatternsSummary {
   favouriteStore: string | null;
   potentialSavings: number | null;
 }
+
+/**
+ * Collect&Go (Colruyt Group) missing-ingredient shopping suggestions.
+ * Tiered by brand: Everyday < Boni Selection < Boni Bio < Bio-Time < Nationaal A-merk.
+ */
+export interface CollectAndGoProduct {
+  product: string;
+  brand: string;
+  category: string;
+  unit: string;
+  price_eur: number;
+  tier: string;
+  shopUrl: string;
+  substituted_for_tier?: string;
+}
+
+export interface CollectAndGoSuggestResponse {
+  ingredient: string;
+  source: 'preference' | 'purchase_history';
+  profile: string;
+  mix: Record<string, number>;
+  suggestions: CollectAndGoProduct[];
+  shortfall: Record<string, number>;
+}

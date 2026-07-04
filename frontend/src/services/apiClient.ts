@@ -38,7 +38,8 @@ import type {
   SuggestResponse,
   ReceiptHistoryResponse,
   BrandPreferencesResponse,
-  BuyingPatternsSummary
+  BuyingPatternsSummary,
+  CollectAndGoSuggestResponse
 } from '../types';
 
 /**
@@ -479,6 +480,20 @@ const apiClient = {
   getBuyingSummary: async (userId: string): Promise<BuyingPatternsSummary> => {
     const response = await axiosInstance.get<BuyingPatternsSummary>('/history/summary', {
       params: { userId },
+    });
+    return response.data;
+  },
+
+  /**
+   * Collect&Go (Colruyt Group) missing-ingredient shopping suggestions,
+   * tiered by brand and picked from the user's stated budget preference
+   * or (fallback) their purchase-history buying pattern.
+   *
+   * Endpoint: GET /api/collectandgo/suggest
+   */
+  getCollectAndGoSuggestion: async (ingredient: string): Promise<CollectAndGoSuggestResponse> => {
+    const response = await axiosInstance.get<CollectAndGoSuggestResponse>('/collectandgo/suggest', {
+      params: { ingredient },
     });
     return response.data;
   },

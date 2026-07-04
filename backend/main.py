@@ -13,7 +13,7 @@ import json
 from datetime import datetime
 
 from app.database import get_database
-from app.routers import scan, pantry, recipes, substitutions, planner, preferences, receipt, suggest, history
+from app.routers import scan, pantry, recipes, substitutions, planner, preferences, receipt, suggest, history, collectandgo
 from app.routers.chammach import router as chammach_router
 from app.guardrails import demo_preflight_check
 
@@ -168,6 +168,7 @@ app.include_router(preferences.router)
 app.include_router(receipt.router)
 app.include_router(suggest.router)
 app.include_router(history.router)
+app.include_router(collectandgo.router)
 app.include_router(chammach_router)
 
 
