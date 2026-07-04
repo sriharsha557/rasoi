@@ -15,12 +15,9 @@ const DIALOGUES = [
 ];
 
 const STEPS = [
-  { emoji: '📝', label: 'Onboard', detail: 'Tell us your tastes, once' },
-  { emoji: '📸', label: 'Scan', detail: 'Photo of your fridge or shelf' },
-  { emoji: '🔍', label: 'Detect', detail: 'AI reads every ingredient' },
-  { emoji: '🧠', label: 'Decide', detail: "Chammach picks tonight's meal" },
-  { emoji: '👨‍🍳', label: 'Cook', detail: 'Step-by-step, no guesswork' },
-  { emoji: '🛒', label: 'Shop', detail: 'Missing items, one tap away' },
+  { emoji: '📸', label: 'Scan your pantry', detail: 'One photo of your fridge or shelf — tell us your tastes once, at setup.' },
+  { emoji: '🧠', label: 'Get tonight\'s pick', detail: 'Food Buddy matches a meal to what you already have.' },
+  { emoji: '👨‍🍳', label: 'Cook & shop', detail: 'Step-by-step guidance — missing items are one tap away.' },
 ];
 
 function daysAgo(isoDate: string): string {
@@ -180,47 +177,38 @@ export default function LandingPage() {
       `}</style>
 
       {/* ── Hero ── */}
-      <main className="relative flex flex-col items-center justify-center px-6 pt-28 pb-10 text-center overflow-hidden">
+      <main className="relative flex flex-col items-center justify-center px-6 pt-20 pb-6 text-center overflow-hidden">
 
-        {/* Floating orbs */}
-        <div className="landing-orb1 absolute -top-16 -left-10 w-52 h-52 bg-rasoi-light rounded-full pointer-events-none" />
-        <div className="landing-orb2 absolute top-5 -right-8 w-40 h-40 bg-rasoi-light rounded-full pointer-events-none" />
-        <div className="landing-orb3 absolute bottom-0 left-1/3 w-28 h-28 rounded-full pointer-events-none" style={{ background: '#f0faf5' }} />
+        {/* Floating orb — single, subtle */}
+        <div className="landing-orb1 absolute -top-16 -left-10 w-52 h-52 bg-rasoi-light rounded-full pointer-events-none opacity-70" />
 
         {/* Badge */}
-        <div className="anim-a relative z-10 inline-flex items-center gap-2 bg-rasoi-light text-rasoi-dark text-xs font-semibold tracking-widest uppercase px-3 py-1.5 rounded-full mb-5">
+        <div className="anim-a relative z-10 inline-flex items-center gap-2 bg-rasoi-light text-rasoi-dark text-xs font-semibold tracking-widest uppercase px-3 py-1.5 rounded-full mb-4">
           <span className="landing-shimmer w-1.5 h-1.5 rounded-full bg-rasoi" />
           End the daily 'what to cook' struggle
         </div>
 
         {/* Logo */}
-        <div className="anim-b relative z-10 mb-3">
-          <h1 className="text-6xl sm:text-7xl font-bold text-gray-900" style={{ letterSpacing: '-2px', lineHeight: 1 }}>
-            Food
-            <span className="text-rasoi relative inline-block">
-              Buddy
-              <span className="landing-pulse-ring absolute rounded-md border-2 border-rasoi" style={{ inset: '-4px' }} />
-            </span>
+        <div className="anim-b relative z-10 mb-2">
+          <h1 className="text-3xl sm:text-4xl font-bold text-gray-900" style={{ letterSpacing: '-1px', lineHeight: 1 }}>
+            Food<span className="text-rasoi">Buddy</span>
           </h1>
         </div>
 
-        {/* Hook */}
-        <p className="anim-c relative z-10 text-2xl sm:text-3xl font-bold text-gray-900 mb-2 max-w-md">
-          "What should I cook today?"
-        </p>
-        <p className="anim-c relative z-10 text-xs font-semibold text-rasoi uppercase tracking-widest mb-4">
-          The daily decision fatigue is real
+        {/* Hook — a specific value proposition, not a vague question */}
+        <p className="anim-c relative z-10 text-2xl sm:text-3xl font-bold text-gray-900 mb-2 max-w-md leading-tight">
+          Know tonight's dinner before you open the fridge.
         </p>
         {/* Problem → Solution */}
-        <p className="anim-d relative z-10 text-sm text-gray-500 max-w-sm leading-relaxed mb-1">
+        <p className="anim-d relative z-10 text-sm text-gray-600 max-w-sm leading-relaxed mb-1">
           You have food. You have no plan. You waste both.
         </p>
-        <p className="anim-d relative z-10 text-base text-gray-800 font-semibold max-w-sm leading-relaxed mb-7">
+        <p className="anim-d relative z-10 text-base text-gray-800 font-semibold max-w-sm leading-relaxed mb-6">
           Show us your pantry. We decide for you.
         </p>
 
         {/* CTA */}
-        <div className="anim-e relative z-10 flex flex-col items-center gap-2 mb-4">
+        <div className="anim-e relative z-10 flex flex-col items-center gap-2 mb-6">
           {!isGuest ? (
             <>
               <button
@@ -229,7 +217,7 @@ export default function LandingPage() {
               >
                 <CameraIcon /> Get Started — Show me your pantry
               </button>
-              <p className="text-[11px] text-gray-400 mt-0.5">
+              <p className="text-[11px] text-gray-500 mt-0.5">
                 Quick one-time setup: tastes, diet, budget — then just scan and cook.
               </p>
             </>
@@ -243,9 +231,9 @@ export default function LandingPage() {
           )}
         </div>
 
-        {/* Chammach */}
+        {/* Chammach — one support element: the animated mascot + its speech bubble */}
         <div
-          className="anim-g landing-float relative z-10 mt-6 cursor-pointer select-none flex flex-col items-center"
+          className="anim-g landing-float relative z-10 cursor-pointer select-none flex flex-col items-center"
           onClick={chammachTalk}
         >
           {/* Speech bubble */}
@@ -259,35 +247,30 @@ export default function LandingPage() {
 
           {/* Animated spoon */}
           <ChammachSpoon wiggling={isWiggling} mouthOpen={mouthOpen} />
-
-          {/* Introduction tag */}
-          <div className="mt-3 bg-white border border-rasoi/20 rounded-card shadow-card px-4 py-2.5 text-center max-w-[220px] mx-auto">
-            <p className="text-xs font-semibold text-rasoi leading-snug">Hi, I'm Chammach! 🥄</p>
-            <p className="text-[11px] text-gray-500 mt-0.5 leading-snug">
-              Your kitchen assistant — I'll guide you through every step.
-            </p>
-          </div>
         </div>
       </main>
 
       {/* ── How it works ── */}
-      <section className="bg-rasoi-panel border-t border-gray-100 py-12 px-6">
-        <p className="text-center text-xl font-semibold text-gray-800 mb-1">How Food Buddy works</p>
-        <p className="text-center text-xs text-gray-400 mb-8">Six steps. One decision made for you.</p>
-        <div className="flex flex-wrap items-start justify-center gap-x-2 gap-y-6 max-w-4xl mx-auto">
+      <section className="bg-rasoi-panel py-8 px-6">
+        <p className="text-center text-lg font-semibold text-gray-800 mb-5">How Food Buddy works</p>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-3xl mx-auto">
           {STEPS.map((step, idx) => (
-            <React.Fragment key={step.label}>
-              <FeatureCard visible={visibleCards[idx]} cardRef={(el) => { cardRefs.current[idx] = el; }}>
-                <div className="w-11 h-11 rounded-xl bg-rasoi-light flex items-center justify-center mx-auto mb-2 text-xl">
+            <FeatureCard
+              key={step.label}
+              visible={visibleCards[idx]}
+              cardRef={(el) => { cardRefs.current[idx] = el; }}
+            >
+              <div className="flex items-center gap-2 mb-2">
+                <span className="w-6 h-6 shrink-0 rounded-full bg-rasoi text-white text-xs font-bold flex items-center justify-center">
+                  {idx + 1}
+                </span>
+                <div className="w-10 h-10 rounded-xl bg-rasoi-light flex items-center justify-center text-xl">
                   {step.emoji}
                 </div>
-                <p className="font-semibold text-sm text-gray-900 mb-0.5">{step.label}</p>
-                <p className="text-[11px] text-gray-500 leading-snug">{step.detail}</p>
-              </FeatureCard>
-              {idx < STEPS.length - 1 && (
-                <div className="hidden sm:flex items-center text-gray-300 text-lg self-center px-0.5">→</div>
-              )}
-            </React.Fragment>
+              </div>
+              <p className="font-semibold text-base text-gray-900 mb-1">{step.label}</p>
+              <p className="text-[13px] text-gray-600 leading-snug">{step.detail}</p>
+            </FeatureCard>
           ))}
         </div>
       </section>
@@ -305,7 +288,7 @@ export default function LandingPage() {
 
       {/* ── Close ── */}
       <section className="py-14 px-6 text-center border-b border-gray-100">
-        <p className="text-lg sm:text-xl font-medium text-gray-400 max-w-xl mx-auto leading-snug">
+        <p className="text-lg sm:text-xl font-medium text-gray-500 max-w-xl mx-auto leading-snug">
           This is not a recipe app.
         </p>
         <p className="text-2xl sm:text-3xl font-bold text-gray-900 max-w-xl mx-auto leading-snug mt-1">
@@ -314,7 +297,7 @@ export default function LandingPage() {
       </section>
 
       {/* ── Footer ── */}
-      <footer className="py-5 text-center text-[11px] text-gray-400 border-t border-gray-100">
+      <footer className="py-5 text-center text-[11px] text-gray-500 border-t border-gray-100">
         Food Buddy &nbsp;·&nbsp; End the daily 'what to cook' struggle &nbsp;·&nbsp; Colruyt Group India Hackathon 2025
       </footer>
 
@@ -362,7 +345,7 @@ function FeatureCard({
   return (
     <div
       ref={cardRef}
-      className="bg-white border border-gray-100 rounded-card p-4 w-32 sm:w-36 text-center hover:-translate-y-1 transition-all"
+      className="bg-white border border-gray-100 rounded-card p-4 text-left hover:-translate-y-1 transition-all"
       style={{
         opacity: 0,
         ...(visible ? { animation: 'landingCardIn .5s ease forwards' } : {}),
