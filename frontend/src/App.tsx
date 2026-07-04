@@ -13,6 +13,7 @@ import PantryPage from './pages/PantryPage';
 import MealsPage from './pages/MealsPage';
 import RecipePage from './pages/RecipePage';
 import PlannerPage from './pages/PlannerPage';
+import CollectAndGoPage from './pages/CollectAndGoPage';
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
               <Route path="/planner" element={<PlannerPage />} />
               <Route path="/recipe" element={<RecipePage />} />
               <Route path="/recipe/:id" element={<RecipePage />} />
+              <Route path="/collect-and-go" element={<CollectAndGoPage />} />
             </Routes>
             <Buddy />
           </BrowserRouter>

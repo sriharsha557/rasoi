@@ -491,9 +491,9 @@ const apiClient = {
    *
    * Endpoint: GET /api/collectandgo/suggest
    */
-  getCollectAndGoSuggestion: async (ingredient: string): Promise<CollectAndGoSuggestResponse> => {
+  getCollectAndGoSuggestion: async (ingredient: string, cuisine?: string): Promise<CollectAndGoSuggestResponse> => {
     const response = await axiosInstance.get<CollectAndGoSuggestResponse>('/collectandgo/suggest', {
-      params: { ingredient },
+      params: { ingredient, ...(cuisine ? { cuisine } : {}) },
     });
     return response.data;
   },

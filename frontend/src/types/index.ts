@@ -469,6 +469,7 @@ export interface CollectAndGoProduct {
   category: string;
   unit: string;
   price_eur: number;
+  currency?: 'EUR' | 'INR' | string;
   tier: string;
   shopUrl: string;
   substituted_for_tier?: string;
@@ -476,8 +477,9 @@ export interface CollectAndGoProduct {
 
 export interface CollectAndGoSuggestResponse {
   ingredient: string;
-  source: 'preference' | 'purchase_history';
+  source: 'preference' | 'purchase_history' | 'cuisine';
   profile: string;
+  cuisine?: string;
   mix: Record<string, number>;
   suggestions: CollectAndGoProduct[];
   shortfall: Record<string, number>;

@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/collectandgo", tags=["collectandgo"])
 async def suggest(
     ingredient: str = Query(..., description="Missing ingredient name, e.g. 'melk'"),
     customerId: str = Query(DEFAULT_CUSTOMER_ID, description="Synthetic Collect&Go customer id (CUST001-CUST010)"),
+    cuisine: str = Query(None, description="Recipe cuisine (e.g. 'Indian') — routes to the matching brand catalogue"),
 ):
     """Suggest Collect&Go products for a missing ingredient, tiered by brand."""
     try:
@@ -44,7 +45,7 @@ async def suggest(
         }
 
     try:
-        result = suggest_for_missing_ingredient(ingredient, preferences, customerId)
+        result = suggest_for_missing_ingredient(ingredient, preferences, customerId, cuisine)
     except Exception as e:
         raise HTTPException(status_code=502, detail=f"Collect&Go suggestion failed: {e}")
 

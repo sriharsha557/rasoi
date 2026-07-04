@@ -19,8 +19,14 @@ from urllib.parse import quote_plus
 
 from app.services.collectandgo.classify_customer import classify_customer
 from app.services.collectandgo.collect_and_go import suggest_articles
+from app.services.collectandgo.indian_brands import suggest_indian_brands
 
 DEFAULT_CUSTOMER_ID = "CUST001"
+
+# Cuisines that map to the Indian brand catalogue (Amul, Milky Mist, …) rather
+# than the Belgian Collect&Go (Colruyt) tiers.
+_INDIAN_CUISINES = {"indian", "south indian", "north indian", "pan indian",
+                    "punjabi", "bengali", "gujarati", "maharashtrian"}
 
 # Illustrative, fixed conversion — not a live exchange rate.
 INR_TO_EUR_RATE = 1 / 90
@@ -51,12 +57,27 @@ def suggest_for_missing_ingredient(
     ingredient: str,
     preferences: dict | None = None,
     customer_id: str = DEFAULT_CUSTOMER_ID,
+    cuisine: str | None = None,
 ) -> dict:
     """
     Returns {ingredient, source, profile, mix, suggestions[], shortfall}.
-    `source` is "preference" (budget-derived) or "purchase_history" (classify_customer).
-    Each suggestion dict gets a `shopUrl` (Collect&Go search link) added.
+    `source` is "cuisine" (Indian brand catalogue), "preference" (budget-derived)
+    or "purchase_history" (classify_customer). Each suggestion dict carries a
+    `shopUrl`, `currency`, and `price_eur` (the numeric price in that currency).
     """
+    # Cuisine-aware path: Indian recipes → Indian brands (Amul, Milky Mist, …).
+    if cuisine and cuisine.strip().lower() in _INDIAN_CUISINES:
+        suggestions = suggest_indian_brands(ingredient)
+        return {
+            "ingredient": ingredient,
+            "source": "cuisine",
+            "profile": "Indian kitchen brands",
+            "cuisine": cuisine,
+            "mix": {},
+            "suggestions": suggestions,
+            "shortfall": {},
+        }
+
     has_preference = bool(
         preferences
         and preferences.get("onboardingCompleted")
@@ -80,11 +101,13 @@ def suggest_for_missing_ingredient(
     result = suggest_articles(ingredient, mix)
     for item in result["suggestions"]:
         item["shopUrl"] = _collect_and_go_search_url(item["product"])
+        item.setdefault("currency", "EUR")
 
     return {
         "ingredient": ingredient,
         "source": source,
         "profile": profile,
+        "cuisine": cuisine or "",
         "mix": mix,
         "suggestions": result["suggestions"],
         "shortfall": result["shortfall"],

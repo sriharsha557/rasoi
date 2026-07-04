@@ -4,15 +4,7 @@ import { usePantry } from '../context/PantryContext';
 import { useRecipe } from '../context/RecipeContext';
 import apiClient from '../services/apiClient';
 import recipeService from '../services/recipeService';
-import type { RecipeStep, SubstitutionsResponse, CollectAndGoSuggestResponse } from '../types';
-
-const TIER_STYLES: Record<string, string> = {
-  Everyday: 'bg-gray-100 text-gray-600 border-gray-200',
-  'Boni Selection': 'bg-rasoi-light text-rasoi-dark border-rasoi/30',
-  'Boni Bio': 'bg-green-50 text-green-700 border-green-200',
-  'Bio-Time': 'bg-rasoi-amber-light text-rasoi-amber border-rasoi-amber/30',
-  'Nationaal A-merk': 'bg-purple-50 text-purple-700 border-purple-200',
-};
+import type { RecipeStep, SubstitutionsResponse } from '../types';
 
 function NutritionStat({ label, value }: { label: string; value: string }) {
   return (
@@ -39,10 +31,6 @@ export default function RecipePage() {
   const [substitutions, setSubstitutions] = useState<Record<string, SubstitutionsResponse>>({});
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
   const [loadingSub, setLoadingSub] = useState<string | null>(null);
-  // Collect&Go shopping suggestions
-  const [shopSuggestions, setShopSuggestions] = useState<Record<string, CollectAndGoSuggestResponse>>({});
-  const [expandedShop, setExpandedShop] = useState<string | null>(null);
-  const [loadingShop, setLoadingShop] = useState<string | null>(null);
   const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
   const [recipeError, setRecipeError] = useState<string | null>(null);
 
@@ -203,23 +191,6 @@ export default function RecipePage() {
     }
   };
 
-  const fetchShop = async (missingIng: string) => {
-    if (shopSuggestions[missingIng]) {
-      setExpandedShop(expandedShop === missingIng ? null : missingIng);
-      return;
-    }
-    setLoadingShop(missingIng);
-    try {
-      const res = await apiClient.getCollectAndGoSuggestion(missingIng);
-      setShopSuggestions((prev) => ({ ...prev, [missingIng]: res }));
-      setExpandedShop(missingIng);
-    } catch {
-      // swallow
-    } finally {
-      setLoadingShop(null);
-    }
-  };
-
   const fmtTimer = (secs: number) => `${Math.floor(secs / 60)}:${String(secs % 60).padStart(2, '0')}`;
 
   // Match % color
@@ -344,8 +315,11 @@ export default function RecipePage() {
                           <button onClick={() => fetchSubs(miss)} className="text-xs text-rasoi-amber font-bold">
                             {loadingSub === miss ? '...' : expandedSub === miss ? '▲ Hide' : '▼ Show sub'}
                           </button>
-                          <button onClick={() => fetchShop(miss)} className="text-xs text-rasoi-dark font-bold">
-                            {loadingShop === miss ? '...' : expandedShop === miss ? '▲ Hide' : '🛒 Shop it'}
+                          <button
+                            onClick={() => navigate(`/collect-and-go?ingredient=${encodeURIComponent(miss)}${currentRecipe.cuisine ? `&cuisine=${encodeURIComponent(currentRecipe.cuisine)}` : ''}`)}
+                            className="text-xs text-rasoi-dark font-bold"
+                          >
+                            🛒 Shop it
                           </button>
                         </div>
                       </div>
@@ -370,46 +344,6 @@ export default function RecipePage() {
                             <div className="bg-white rounded-lg p-2.5 text-xs text-gray-500 border border-rasoi-amber/20">
                               No substitute found for this ingredient.
                             </div>
-                          )}
-                        </div>
-                      )}
-                      {expandedShop === miss && shopSuggestions[miss] && (
-                        <div className="px-3 pb-3 space-y-2 animate-fade-in">
-                          <p className="text-[11px] text-gray-500">
-                            {shopSuggestions[miss].profile}
-                            {shopSuggestions[miss].source === 'purchase_history' && ' (based on your past purchases)'}
-                          </p>
-                          {shopSuggestions[miss].suggestions.length > 0 ? (
-                            shopSuggestions[miss].suggestions.map((p, i) => (
-                              <a
-                                key={i}
-                                href={p.shopUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center justify-between gap-2 bg-white rounded-lg p-2.5 text-xs border border-rasoi-amber/20 hover:border-rasoi transition-colors"
-                              >
-                                <div>
-                                  <p className="font-semibold text-gray-900 capitalize">{p.product} <span className="font-normal text-gray-400">· {p.brand}</span></p>
-                                  <span className={`inline-block mt-1 text-[10px] font-semibold px-2 py-0.5 rounded-pill border ${TIER_STYLES[p.tier] ?? TIER_STYLES.Everyday}`}>
-                                    {p.tier}
-                                  </span>
-                                </div>
-                                <div className="text-right shrink-0">
-                                  <p className="font-bold text-rasoi-dark">€{p.price_eur.toFixed(2)}</p>
-                                  <p className="text-[10px] text-gray-400">Collect&Go →</p>
-                                </div>
-                              </a>
-                            ))
-                          ) : (
-                            <a
-                              href="https://www.collectandgo.be/nl/home"
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="flex items-center justify-between gap-2 bg-white rounded-lg p-2.5 text-xs border border-rasoi-amber/20 hover:border-rasoi transition-colors"
-                            >
-                              <span className="text-gray-600">No exact match in our catalog yet — shop it directly.</span>
-                              <span className="font-bold text-rasoi-dark shrink-0">Collect&Go →</span>
-                            </a>
                           )}
                         </div>
                       )}
