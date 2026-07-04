@@ -235,7 +235,7 @@ export default function LandingPage() {
               onClick={handleGuest}
               className="inline-flex items-center gap-1.5 px-6 py-3 bg-rasoi-light text-rasoi-dark font-bold text-sm rounded-pill"
             >
-              ✅ {demoUser?.displayName ?? 'Rasoi Raja'}: Continue →
+              ✅ {demoUser?.displayName ?? 'Captain Cook'}: Continue →
             </button>
           )}
         </div>

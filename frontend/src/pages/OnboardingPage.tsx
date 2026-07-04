@@ -127,7 +127,7 @@ export default function OnboardingPage() {
       <div className="max-w-2xl mx-auto space-y-6">
         {/* Hero */}
         <section className="bg-rasoi border border-rasoi-dark rounded-card shadow-card p-6 text-white">
-          <p className="text-xs font-bold uppercase tracking-widest text-white/75">Welcome, Rasoi Raja 🥄</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-white/75">Welcome, Captain Cook 🥄</p>
           <h1 className="text-2xl md:text-3xl font-extrabold text-white mt-1">
             Let's set up your kitchen profile
           </h1>

@@ -5,7 +5,8 @@ export default function GuestBanner() {
 
   if (!isGuest) return null;
 
-  const displayName = demoUser?.displayName ?? 'Rasoi Raja';
+  const displayName = demoUser?.displayName ?? 'Captain Cook';
+  const cuisineLabel = demoUser?.cuisinePref?.length ? demoUser.cuisinePref.join(' & ') : 'Belgian & Mediterranean';
 
   return (
     <div className="fixed top-14 left-0 right-0 z-40 bg-rasoi-amber-light border-b border-rasoi-amber/30 px-4 py-2">
@@ -14,11 +15,11 @@ export default function GuestBanner() {
           <span className="text-lg">🥄</span>
           <span className="text-gray-700">
             Demo user: <span className="font-bold text-rasoi-amber">{displayName}</span>
-            <span className="hidden sm:inline text-gray-500"> — Indian cuisine, 2 servings.</span>
+            <span className="hidden sm:inline text-gray-500"> — {cuisineLabel} cuisine, 2 servings.</span>
           </span>
         </div>
         <div className="flex items-center gap-3 shrink-0">
-          <span className="hidden sm:inline text-xs text-gray-500 italic">raja@rasoi.app</span>
+          <span className="hidden sm:inline text-xs text-gray-500 italic">{demoUser?.email ?? 'captaincook@foodbuddy.app'}</span>
           <button
             onClick={exitGuestMode}
             className="text-xs font-semibold text-rasoi-amber hover:text-rasoi-dark underline underline-offset-2 transition-colors"

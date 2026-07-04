@@ -85,12 +85,12 @@ MEAL_TEMPLATES: list[dict[str, Any]] = [
 
 DEFAULT_HOUSEHOLD = {
     "id": "5d6b4c66-945a-414e-92e4-8fe99ca89e6a",
-    "name": "Rasoi Raja",
-    "email": "raja@rasoi.app",
+    "name": "Captain Cook",
+    "email": "captaincook@foodbuddy.app",
     "cuisinePref": ["Belgian", "Mediterranean"],
     "dietaryRestrictions": [],
     "members": [
-        {"id": "5d6b4c66-945a-414e-92e4-8fe99ca89e6a", "name": "Rasoi Raja", "dietaryPreferences": [], "servings": 2},
+        {"id": "5d6b4c66-945a-414e-92e4-8fe99ca89e6a", "name": "Captain Cook", "dietaryPreferences": [], "servings": 2},
         {"id": "member-2", "name": "Demo family member", "dietaryPreferences": [], "servings": 1},
     ],
     "defaultServings": 2,

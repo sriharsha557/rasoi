@@ -12,9 +12,9 @@ export interface DemoUser {
 
 export const DEMO_USER: DemoUser = {
   id: '5d6b4c66-945a-414e-92e4-8fe99ca89e6a',
-  email: 'raja@rasoi.app',
-  displayName: 'Rasoi Raja',
-  cuisinePref: ['Indian'],
+  email: 'captaincook@foodbuddy.app',
+  displayName: 'Captain Cook',
+  cuisinePref: ['Belgian', 'Mediterranean'],
   servings: 2,
   dietaryRestrictions: [],
 };
