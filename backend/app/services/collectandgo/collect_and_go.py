@@ -68,11 +68,46 @@ def _catalog_from_dataset(data_path=DATA_PATH):
     return out
 
 
+# The synthetic catalog's product names are Dutch (see the dataset generator),
+# but recipes throughout the app name ingredients in English — map the common
+# ones so "butter" actually matches the catalog's "boter" entries, etc.
+_EN_TO_NL = {
+    "butter": "boter",
+    "milk": "melk",
+    "cheese": "kaas",
+    "yogurt": "yoghurt",
+    "yoghurt": "yoghurt",
+    "bread": "brood",
+    "coffee": "koffie",
+    "tea": "thee",
+    "rice": "rijst",
+    "potato": "aardappelen",
+    "potatoes": "aardappelen",
+    "apple": "appels",
+    "apples": "appels",
+    "banana": "bananen",
+    "bananas": "bananen",
+    "tomato": "tomaten",
+    "tomatoes": "tomaten",
+    "carrot": "wortelen",
+    "carrots": "wortelen",
+    "chicken": "kip",
+    "mince": "gehakt",
+    "ground beef": "gehakt",
+    "biscuits": "koekjes",
+    "cookies": "koekjes",
+    "chocolate": "chocolade",
+    "dish soap": "afwasmiddel",
+    "detergent": "wasmiddel",
+}
+
+
 def _match_ingredient(catalog, ingredient):
     """Token-match an ingredient name against a catalog's product/category text."""
     toks = [t for t in re.split(r"\W+", ingredient.lower()) if len(t) > 2]
     if not toks:
         toks = [ingredient.lower()]
+    toks = toks + [_EN_TO_NL[t] for t in toks if t in _EN_TO_NL]
     return [a for a in catalog if any(t in f"{a['product']} {a['category']}".lower() for t in toks)]
 
 

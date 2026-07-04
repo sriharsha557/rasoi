@@ -95,8 +95,8 @@ _INDIAN_CATALOG: dict[str, list[dict]] = {
 }
 
 
-def _bigbasket_url(product_name: str) -> str:
-    return f"https://www.bigbasket.com/ps/?q={quote_plus(product_name)}"
+def _collect_and_go_url(product_name: str) -> str:
+    return f"https://www.collectandgo.be/nl/search?text={quote_plus(product_name)}"
 
 
 def _match_key(ingredient: str) -> str | None:
@@ -123,6 +123,6 @@ def suggest_indian_brands(ingredient: str, max_items: int = 3) -> list[dict]:
             "price_eur": p["price"],   # numeric price (₹ here; see currency)
             "currency": "INR",
             "tier": p["tier"],
-            "shopUrl": _bigbasket_url(p["product"]),
+            "shopUrl": _collect_and_go_url(p["product"]),
         })
     return out
