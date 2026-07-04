@@ -387,17 +387,17 @@ async def demo_preflight_check() -> dict:
     results: dict[str, dict] = {}
 
     # ── S1: AI API reachability ──────────────────────────────────────────────
-    openai_key = os.getenv("OPENAI_API_KEY", "")
-    if not openai_key:
-        results["ai_api"] = {"status": "fail", "detail": "OPENAI_API_KEY not set"}
+    anthropic_key = os.getenv("ANTHROPIC_API_KEY", "")
+    if not anthropic_key:
+        results["ai_api"] = {"status": "fail", "detail": "ANTHROPIC_API_KEY not set"}
     else:
         try:
             from app.clients.ai_config import get_async_client, get_model
             client = get_async_client()
             # Minimal call to verify key validity
-            await client.chat.completions.create(
+            await client.messages.create(
                 model=get_model(),
-                max_completion_tokens=10,
+                max_tokens=10,
                 messages=[{"role": "user", "content": "ping"}],
             )
             results["ai_api"] = {"status": "ok", "detail": "AI API reachable"}

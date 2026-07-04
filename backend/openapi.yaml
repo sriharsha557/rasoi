@@ -154,7 +154,7 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
         '503':
-          description: AI client not configured (missing OPENAI_API_KEY)
+          description: AI client not configured (missing ANTHROPIC_API_KEY)
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }

@@ -1,18 +1,15 @@
 """
 AI client for Vision (image scanning) and Text (recipes, substitutions).
 
-Uses the OpenAI SDK against an Azure AI Foundry (OpenAI-compatible) endpoint.
-All functions are async and use AsyncOpenAI to avoid blocking the event loop.
-
-NOTE: the module is still named ``claude_client`` for backwards compatibility
-with existing imports across the codebase; it no longer uses Anthropic/Claude.
+Uses the official Anthropic Python SDK against the Claude API. All functions
+are async and use AsyncAnthropic to avoid blocking the event loop.
 """
 
 import base64
 import json
 import re
 
-from app.clients.ai_config import get_async_client, get_model, completion_kwargs
+from app.clients.ai_config import get_async_client, get_model
 
 
 def _encode_image(image_bytes: bytes) -> str:
@@ -24,6 +21,11 @@ def _parse_json_response(text: str) -> dict | list:
     cleaned = re.sub(r"^```(?:json)?\s*", "", text.strip(), flags=re.MULTILINE)
     cleaned = re.sub(r"\s*```$", "", cleaned.strip(), flags=re.MULTILINE)
     return json.loads(cleaned.strip())
+
+
+def _text_of(response) -> str:
+    """Concatenate the text blocks of a Claude Messages API response."""
+    return "".join(block.text for block in response.content if block.type == "text")
 
 
 async def extract_ingredients(image_bytes: bytes, media_type: str = "image/jpeg") -> list[dict]:
@@ -58,25 +60,24 @@ Example:
   {{"name": "tomato", "quantity": 4, "unit": "pcs", "acquisition_date": "{today}", "expiration_date": "{default_expiry}", "confidence": 0.95}}
 ]"""
 
-    response = await client.chat.completions.create(
+    response = await client.messages.create(
         model=get_model(),
-        max_completion_tokens=4096,
+        max_tokens=4096,
         messages=[
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": prompt},
                     {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{media_type};base64,{b64}"},
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": media_type, "data": b64},
                     },
+                    {"type": "text", "text": prompt},
                 ],
             }
         ],
-        **completion_kwargs(),
     )
 
-    raw = response.choices[0].message.content
+    raw = _text_of(response)
     result = _parse_json_response(raw)
     return result if isinstance(result, list) else []
 
@@ -101,25 +102,24 @@ async def extract_receipt_items(
     client = get_async_client()
     b64 = _encode_image(image_bytes)
 
-    response = await client.chat.completions.create(
+    response = await client.messages.create(
         model=get_model(),
-        max_completion_tokens=4096,
+        max_tokens=4096,
         messages=[
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": RECEIPT_ITEMS_PROMPT},
                     {
-                        "type": "image_url",
-                        "image_url": {"url": f"data:{media_type};base64,{b64}"},
+                        "type": "image",
+                        "source": {"type": "base64", "media_type": media_type, "data": b64},
                     },
+                    {"type": "text", "text": RECEIPT_ITEMS_PROMPT},
                 ],
             }
         ],
-        **completion_kwargs(),
     )
 
-    raw_text = response.choices[0].message.content
+    raw_text = _text_of(response)
     result = _parse_json_response(raw_text)
     items = result if isinstance(result, list) else []
     return items, raw_text
@@ -174,7 +174,7 @@ Return ONLY a JSON array (no markdown, no explanation). Each recipe:
 {{
   "id": "unique-slug-string",
   "name": "Recipe Name",
-  "cuisine": "Indian|Italian|Mexican|etc",
+  "cuisine": "Belgian|Italian|Mediterranean|Asian|etc",
   "difficulty": "Easy|Medium|Hard",
   "prepTimeMinutes": 30,
   "matchPercentage": 85,
@@ -200,14 +200,13 @@ Rules:
 - Sort by matchPercentage descending (expiring-using recipes first if prioritize_expiring)
 """
 
-    response = await client.chat.completions.create(
+    response = await client.messages.create(
         model=get_model(),
-        max_completion_tokens=8192,
+        max_tokens=8192,
         messages=[{"role": "user", "content": prompt}],
-        **completion_kwargs(),
     )
 
-    raw = response.choices[0].message.content
+    raw = _text_of(response)
     result = _parse_json_response(raw)
     return result if isinstance(result, list) else []
 
@@ -302,14 +301,13 @@ recommend_purchase and has_substitutions are mutually exclusive — exactly
 one should reflect the real answer, never both true.
 """
 
-    response = await client.chat.completions.create(
+    response = await client.messages.create(
         model=get_model(),
-        max_completion_tokens=2048,
+        max_tokens=2048,
         messages=[{"role": "user", "content": prompt}],
-        **completion_kwargs(),
     )
 
-    raw = response.choices[0].message.content
+    raw = _text_of(response)
     result = _parse_json_response(raw)
 
     if not isinstance(result, dict):
@@ -348,4 +346,3 @@ one should reflect the real answer, never both true.
         "recommend_purchase": recommend_purchase and not mapped,
         "purchase_reason": result.get("purchase_reason", "") if recommend_purchase else "",
     }
-

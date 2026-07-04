@@ -188,19 +188,6 @@ _TOOLS = [
     },
 ]
 
-# OpenAI function-calling format derived from the Anthropic-style _TOOLS above.
-_OPENAI_TOOLS = [
-    {
-        "type": "function",
-        "function": {
-            "name": t["name"],
-            "description": t.get("description", ""),
-            "parameters": t["input_schema"],
-        },
-    }
-    for t in _TOOLS
-]
-
 _SYSTEM_PROMPT = """
 You are Chammach, Food Buddy's agentic kitchen assistant — a friendly talking spoon.
 
@@ -382,7 +369,6 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
     model = get_model()
 
     messages: list[dict] = [
-        {"role": "system", "content": _SYSTEM_PROMPT},
         {
             "role": "user",
             "content": f"Trigger: {trigger}. Please check the pantry and help the user.",
@@ -392,48 +378,27 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
     final_event: ChammachEvent | None = None
 
     for _ in range(5):
-        # NOTE: gpt-5.5 rejects `reasoning_effort` together with function `tools`
-        # on /chat/completions, so we omit completion_kwargs() here.
-        response = await client.chat.completions.create(
+        response = await client.messages.create(
             model=model,
-            max_completion_tokens=4096,
-            tools=_OPENAI_TOOLS,
+            max_tokens=4096,
+            system=_SYSTEM_PROMPT,
+            tools=_TOOLS,
             messages=messages,
         )
 
-        choice = response.choices[0].message
-        tool_calls = choice.tool_calls or []
+        tool_use_blocks = [block for block in response.content if block.type == "tool_use"]
 
-        if not tool_calls:
-            text = choice.content or "All good in the kitchen!"
-            final_event = ChammachEvent(type="idle", dialogue=text[:200], animation="bounce")
+        if not tool_use_blocks:
+            text = "".join(block.text for block in response.content if block.type == "text")
+            final_event = ChammachEvent(type="idle", dialogue=(text or "All good in the kitchen!")[:200], animation="bounce")
             break
 
-        messages.append({
-            "role": "assistant",
-            "content": choice.content or "",
-            "tool_calls": [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                }
-                for tc in tool_calls
-            ],
-        })
+        messages.append({"role": "assistant", "content": response.content})
 
-        tool_call_index = 0
-        for tool_call in tool_calls:
-            tool_call_index += 1
-
-            tool_name = tool_call.function.name
-            try:
-                tool_input = json.loads(tool_call.function.arguments or "{}")
-            except json.JSONDecodeError:
-                tool_input = {}
+        tool_results: list[dict] = []
+        for tool_call_index, block in enumerate(tool_use_blocks, start=1):
+            tool_name = block.name
+            tool_input = block.input or {}
 
             # Rule 1/2/4: Block disallowed tools before execution
             allowed, rejection_reason = guardrails.validate_agent_tool_call(
@@ -459,11 +424,12 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
                 call_index=tool_call_index,
             )
 
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
                 "content": result,
             })
+
             if tool_name == "notify_user":
                 inp = tool_input
                 # Rule 7: Transparency — validate and sanitise dialogue
@@ -474,7 +440,8 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
                     animation=inp.get("animation", "bounce"),
                     data=inp.get("data"),
                 )
-                break
+
+        messages.append({"role": "user", "content": tool_results})
 
         if final_event:
             break
