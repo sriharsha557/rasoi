@@ -21,6 +21,13 @@ logger = logging.getLogger(__name__)
 # In-memory provider failure flags
 _spoonacular_failed = False
 
+# DEMO: pantry ingredient (lowercase substring) -> exact seeded recipe title
+# to guarantee surfaces first, ahead of AI-generated suggestions.
+_DEMO_TRIGGER_RECIPES = {
+    "paneer": "Paneer Butter Masala",
+    "chicken breast": "Grilled Herb Chicken with Roasted Vegetables & Yogurt Sauce",
+}
+
 
 class RecipeIngredientModel(BaseModel):
     id: str
@@ -501,6 +508,21 @@ async def get_recipes(
     recipes: list[dict] | None = None
     provider = "supabase"
 
+    # DEMO: guarantee these exact seeded recipes surface when their signature
+    # ingredient is scanned, rather than leaving it to (nondeterministic) AI
+    # generation. Only applies to the default "any cuisine" flow.
+    demo_recipes: list[dict] = []
+    if cuisine_value.lower() == "any":
+        for trigger, title in _DEMO_TRIGGER_RECIPES.items():
+            if any(trigger in name for name in pantry_names):
+                try:
+                    match = await search_recipes({"query": title}, pantry_items, 1)
+                except Exception as exc:
+                    logger.warning("Demo trigger recipe lookup failed for %r: %s", title, exc)
+                    match = []
+                if match:
+                    demo_recipes.append(match[0])
+
     if cuisine_value.lower() in {"italian", "mexican"}:
         recipes = await _try_spoonacular(
             pantry_items,
@@ -515,14 +537,19 @@ async def get_recipes(
         # items via the AI model, then recompute matches against the pantry.
         # Capped at 3 diverse recipes (keeps latency down and results varied).
         ai_count = min(max_recipes, 3)
+        remaining = max(0, ai_count - len(demo_recipes))
         try:
-            ai_recipes = await claude_client.get_recipe_recommendations(
-                pantry_items=pantry_items,
-                prioritize_expiring=prioritize_expiring,
-                max_recipes=ai_count,
-                cuisine=cuisine_value,
-                health_conditions=health_conditions,
-                health_goal=health_goal,
+            ai_recipes = (
+                await claude_client.get_recipe_recommendations(
+                    pantry_items=pantry_items,
+                    prioritize_expiring=prioritize_expiring,
+                    max_recipes=remaining,
+                    cuisine=cuisine_value,
+                    health_conditions=health_conditions,
+                    health_goal=health_goal,
+                )
+                if remaining
+                else []
             )
             recipes = [_normalise_ai_recipe(r, pantry_names_norm) for r in (ai_recipes or [])]
             provider = "claude"
@@ -530,7 +557,7 @@ async def get_recipes(
             logger.error("AI recipe generation failed: %s", exc)
             recipes = []
         # Fall back to the Supabase catalogue if the AI produced nothing.
-        if not recipes:
+        if not recipes and not demo_recipes:
             try:
                 recipes = await search_recipes(filters, pantry_items, max_recipes)
                 provider = "supabase"
@@ -554,6 +581,13 @@ async def get_recipes(
                 limit=max_recipes,
             )
 
+    # DEMO: merge in the trigger recipes (deduped by title) before scoring,
+    # so they get the same expiring/health-match treatment as everything else.
+    if demo_recipes:
+        demo_titles = {r["title"] for r in demo_recipes}
+        recipes = demo_recipes + [r for r in (recipes or []) if r.get("title") not in demo_titles]
+        provider = "supabase"
+
     if not recipes:
         return {
             "success": False,
@@ -561,10 +595,17 @@ async def get_recipes(
             "provider": provider,
             "message": "Could not generate recipes with your current pantry.",
         }
-    
+
     # Mark expiring and sort
     recipes = _mark_expiring(recipes, pantry_items)
     recipes = _apply_health_profile(recipes, health_conditions, health_goal)
+
+    # DEMO: pin trigger recipes back to the front — matchPercentage sorting
+    # above shouldn't be able to bury a guaranteed demo recipe. Stable sort
+    # preserves the existing order otherwise.
+    if demo_recipes:
+        demo_titles = {r["title"] for r in demo_recipes}
+        recipes.sort(key=lambda r: r.get("title") not in demo_titles)
 
     return {
         "success": True,

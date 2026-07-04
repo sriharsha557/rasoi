@@ -401,9 +401,15 @@ export default function RecipePage() {
                               </a>
                             ))
                           ) : (
-                            <div className="bg-white rounded-lg p-2.5 text-xs text-gray-500 border border-rasoi-amber/20">
-                              No Collect&Go match found for this ingredient yet.
-                            </div>
+                            <a
+                              href="https://www.collectandgo.be/nl/home"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center justify-between gap-2 bg-white rounded-lg p-2.5 text-xs border border-rasoi-amber/20 hover:border-rasoi transition-colors"
+                            >
+                              <span className="text-gray-600">No exact match in our catalog yet — shop it directly.</span>
+                              <span className="font-bold text-rasoi-dark shrink-0">Collect&Go →</span>
+                            </a>
                           )}
                         </div>
                       )}
