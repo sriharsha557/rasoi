@@ -68,17 +68,17 @@ def _catalog_from_dataset(data_path=DATA_PATH):
     return out
 
 
-def search_local(ingredient, data_path=DATA_PATH):
-    """Offline search: match the ingredient against product name / category."""
+def _match_ingredient(catalog, ingredient):
+    """Token-match an ingredient name against a catalog's product/category text."""
     toks = [t for t in re.split(r"\W+", ingredient.lower()) if len(t) > 2]
     if not toks:
         toks = [ingredient.lower()]
-    hits = []
-    for a in _catalog_from_dataset(data_path):
-        hay = f"{a['product']} {a['category']}".lower()
-        if any(t in hay for t in toks):
-            hits.append(a)
-    return hits
+    return [a for a in catalog if any(t in f"{a['product']} {a['category']}".lower() for t in toks)]
+
+
+def search_local(ingredient, data_path=DATA_PATH):
+    """Offline search: match the ingredient against product name / category."""
+    return _match_ingredient(_catalog_from_dataset(data_path), ingredient)
 
 
 def search_collectandgo(ingredient, session, base_url="https://www.collectandgo.be",
