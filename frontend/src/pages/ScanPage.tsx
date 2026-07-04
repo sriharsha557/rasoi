@@ -38,7 +38,7 @@ export default function ScanPage() {
         {/* Scanner component */}
         <Scanner
           initialScanType={initialType}
-          onScanComplete={() => navigate('/pantry')}
+          onScanComplete={() => navigate('/pantry', { state: { justScanned: true } })}
         />
       </div>
     </div>

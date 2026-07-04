@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { usePantry } from '../context/PantryContext';
 import apiClient from '../services/apiClient';
 import type { PantryItem } from '../types';
@@ -23,6 +23,7 @@ function daysAgo(isoDate: string | null): string {
 
 export default function PantryPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { state, dispatch } = usePantry();
   const { pantryItems, isLoading, error, hasLastScan, scanDate } = state;
 
@@ -30,6 +31,9 @@ export default function PantryPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState(EMPTY_FORM);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [showScanNotice, setShowScanNotice] = useState(
+    Boolean((location.state as { justScanned?: boolean } | null)?.justScanned)
+  );
 
   // Load the session pantry (last scan) on mount, unless already in context
   useEffect(() => {
@@ -139,6 +143,24 @@ export default function PantryPage() {
             </button>
           </div>
         </div>
+
+        {/* AI-scan disclaimer — shown once, right after a scan completes */}
+        {showScanNotice && (
+          <div className="mb-4 flex items-start gap-2 p-3 bg-rasoi-amber-light border border-rasoi-amber/30 rounded-card text-sm text-gray-700">
+            <span className="text-base leading-none">🤖</span>
+            <p className="flex-1">
+              These items were read by AI — it can occasionally miscount or misjudge quantities.
+              Tap <span className="font-semibold">✏️</span> on any item to fix it.
+            </p>
+            <button
+              onClick={() => setShowScanNotice(false)}
+              aria-label="Dismiss"
+              className="text-gray-400 hover:text-gray-600 shrink-0 text-base leading-none"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Error */}
         {error && (
