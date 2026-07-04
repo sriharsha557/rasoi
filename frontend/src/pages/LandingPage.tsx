@@ -6,6 +6,11 @@ import { usePantry } from '../context/PantryContext';
 import apiClient from '../services/apiClient';
 import type { PantryResponse } from '../types';
 
+// TEMP (demo recording): always route "Get Started" through onboarding, even
+// if this user already completed it, so the flow is show-able every take.
+// Flip back to false to restore the normal skip-if-completed behaviour.
+const ALWAYS_SHOW_ONBOARDING = true;
+
 const DIALOGUES = [
   'Namaste! Show me your fridge!',
   "What's for dinner? Let me decide!",
@@ -88,6 +93,10 @@ export default function LandingPage() {
 
   const handleGuest = async () => {
     enterGuestMode();
+    if (ALWAYS_SHOW_ONBOARDING) {
+      navigate('/onboarding');
+      return;
+    }
     try {
       const { preferences } = await apiClient.getPreferences();
       if (!preferences.onboardingCompleted) {

@@ -19,66 +19,66 @@ class Nutrition:
 
 
 CUISINE_PROFILES: dict[str, dict[str, Any]] = {
-    "south_indian": {
-        "id": "south_indian",
-        "name": "South Indian",
-        "staples": ["rice", "dal", "coconut", "curry leaves", "tamarind"],
-        "flavor_notes": ["tangy", "tempered spices", "rice-forward"],
-        "preferred_meals": ["Sambar Rice Bowl", "Vegetable Uttapam", "Lemon Rice with Curd"],
+    "belgian": {
+        "id": "belgian",
+        "name": "Belgian",
+        "staples": ["potato", "leek", "belgian endive", "mustard", "butter"],
+        "flavor_notes": ["hearty", "buttery", "comforting"],
+        "preferred_meals": ["Stoofvlees met Frites", "Witloof Gratin", "Erwtensoep"],
     },
-    "bengali": {
-        "id": "bengali",
-        "name": "Bengali",
-        "staples": ["rice", "mustard oil", "potato", "fish", "panch phoron"],
-        "flavor_notes": ["mustard", "subtle heat", "sweet-savoury balance"],
-        "preferred_meals": ["Aloo Posto Plate", "Mustard Veg Rice", "Moong Dal Khichuri"],
+    "mediterranean": {
+        "id": "mediterranean",
+        "name": "Mediterranean",
+        "staples": ["olive oil", "tomato", "chickpeas", "feta", "lemon"],
+        "flavor_notes": ["bright", "herby", "olive-oil-forward"],
+        "preferred_meals": ["Greek Chickpea Salad Bowl", "Mediterranean Veg Couscous", "Tomato Feta Orzo"],
     },
-    "punjabi": {
-        "id": "punjabi",
-        "name": "Punjabi",
-        "staples": ["wheat", "paneer", "chickpeas", "yogurt", "ghee"],
-        "flavor_notes": ["rich", "warming spices", "protein-forward"],
-        "preferred_meals": ["Chole Roti Bowl", "Paneer Bhurji Wrap", "Rajma Rice"],
+    "asian": {
+        "id": "asian",
+        "name": "Asian",
+        "staples": ["rice", "soy sauce", "ginger", "noodles", "sesame oil"],
+        "flavor_notes": ["umami", "aromatic", "wok-fried"],
+        "preferred_meals": ["Vegetable Fried Rice", "Ginger Soy Noodle Bowl", "Sesame Tofu Stir-fry"],
     },
 }
 
 
 MEAL_TEMPLATES: list[dict[str, Any]] = [
     {
-        "name": "Sambar Rice Bowl",
-        "profile": "south_indian",
-        "ingredients": ["rice", "dal", "carrot", "tomato", "tamarind"],
-        "nutrition": Nutrition(520, 18, 84, 12, 11),
+        "name": "Stoofvlees met Frites",
+        "profile": "belgian",
+        "ingredients": ["beef", "onion", "belgian beer", "potato", "bay leaf"],
+        "nutrition": Nutrition(650, 32, 62, 26, 6),
     },
     {
-        "name": "Vegetable Uttapam",
-        "profile": "south_indian",
-        "ingredients": ["rice", "urad dal", "onion", "tomato", "curd"],
-        "nutrition": Nutrition(430, 15, 70, 10, 7),
+        "name": "Witloof Gratin",
+        "profile": "belgian",
+        "ingredients": ["belgian endive", "ham", "cheese sauce", "potato"],
+        "nutrition": Nutrition(480, 22, 34, 28, 7),
     },
     {
-        "name": "Aloo Posto Plate",
-        "profile": "bengali",
-        "ingredients": ["potato", "poppy seeds", "rice", "mustard oil"],
-        "nutrition": Nutrition(480, 10, 78, 15, 8),
+        "name": "Greek Chickpea Salad Bowl",
+        "profile": "mediterranean",
+        "ingredients": ["chickpeas", "tomato", "feta", "cucumber", "olive oil"],
+        "nutrition": Nutrition(460, 17, 48, 20, 12),
     },
     {
-        "name": "Moong Dal Khichuri",
-        "profile": "bengali",
-        "ingredients": ["rice", "moong dal", "potato", "cauliflower", "ghee"],
-        "nutrition": Nutrition(500, 17, 82, 11, 10),
+        "name": "Mediterranean Veg Couscous",
+        "profile": "mediterranean",
+        "ingredients": ["couscous", "zucchini", "tomato", "olive oil", "lemon"],
+        "nutrition": Nutrition(500, 14, 78, 13, 9),
     },
     {
-        "name": "Chole Roti Bowl",
-        "profile": "punjabi",
-        "ingredients": ["chickpeas", "wheat flour", "onion", "tomato", "yogurt"],
-        "nutrition": Nutrition(610, 24, 88, 18, 15),
+        "name": "Vegetable Fried Rice",
+        "profile": "asian",
+        "ingredients": ["rice", "carrot", "peas", "soy sauce", "egg"],
+        "nutrition": Nutrition(540, 16, 82, 15, 6),
     },
     {
-        "name": "Paneer Bhurji Wrap",
-        "profile": "punjabi",
-        "ingredients": ["paneer", "wheat flour", "onion", "capsicum", "tomato"],
-        "nutrition": Nutrition(560, 26, 58, 25, 8),
+        "name": "Ginger Soy Noodle Bowl",
+        "profile": "asian",
+        "ingredients": ["noodles", "ginger", "soy sauce", "spring onion", "sesame oil"],
+        "nutrition": Nutrition(510, 15, 76, 14, 5),
     },
 ]
 
@@ -87,7 +87,7 @@ DEFAULT_HOUSEHOLD = {
     "id": "5d6b4c66-945a-414e-92e4-8fe99ca89e6a",
     "name": "Rasoi Raja",
     "email": "raja@rasoi.app",
-    "cuisinePref": ["Indian"],
+    "cuisinePref": ["Belgian", "Mediterranean"],
     "dietaryRestrictions": [],
     "members": [
         {"id": "5d6b4c66-945a-414e-92e4-8fe99ca89e6a", "name": "Rasoi Raja", "dietaryPreferences": [], "servings": 2},
@@ -109,16 +109,10 @@ def get_delivery_partners(query_items: list[str] | None = None) -> list[dict[str
     query = quote_plus(", ".join(query_items or ["groceries"]))
     return [
         {
-            "id": "blinkit",
-            "name": "Blinkit",
+            "id": "collectandgo",
+            "name": "Collect&Go",
             "status": "deep_link_ready",
-            "cartUrl": f"https://blinkit.com/s/?q={query}",
-        },
-        {
-            "id": "zepto",
-            "name": "Zepto",
-            "status": "deep_link_ready",
-            "cartUrl": f"https://www.zeptonow.com/search?query={query}",
+            "cartUrl": f"https://www.collectandgo.be/nl/search?text={query}",
         },
     ]
 
@@ -139,7 +133,7 @@ def get_planner_recipe_by_name(meal_name: str) -> dict[str, Any] | None:
     if not meal:
         return None
 
-    profile = CUISINE_PROFILES.get(meal["profile"], CUISINE_PROFILES["south_indian"])
+    profile = CUISINE_PROFILES.get(meal["profile"], CUISINE_PROFILES["belgian"])
     ingredients = [
         {
             "id": f"planner-{meal['name'].lower().replace(' ', '-')}-{index}",
@@ -231,14 +225,7 @@ def get_planner_recipes(
 
     cuisine_value = _normalise_lookup(cuisine or "any")
     if cuisine_value and cuisine_value != "any":
-        if cuisine_value == "indian":
-            pass
-        elif cuisine_value == "north indian":
-            filtered = [recipe for recipe in filtered if _normalise_lookup(recipe.get("cuisine", "")) in {"punjabi", "north indian"}]
-        elif cuisine_value == "pan indian":
-            pass
-        else:
-            filtered = [recipe for recipe in filtered if _normalise_lookup(recipe.get("cuisine", "")) == cuisine_value]
+        filtered = [recipe for recipe in filtered if _normalise_lookup(recipe.get("cuisine", "")) == cuisine_value]
 
     meal_type_value = _normalise_lookup(meal_type or "any")
     if meal_type_value and meal_type_value != "any":
@@ -256,13 +243,13 @@ def get_planner_recipes(
 
 def build_weekly_plan(
     pantry_items: list[dict[str, Any]],
-    region: str = "south_indian",
+    region: str = "belgian",
     household_size: int = 2,
     days: int = 7,
 ) -> dict[str, Any]:
     days = max(1, min(days, 14))
     household_size = max(1, min(household_size, 12))
-    profile = CUISINE_PROFILES.get(region, CUISINE_PROFILES["south_indian"])
+    profile = CUISINE_PROFILES.get(region, CUISINE_PROFILES["belgian"])
     pantry_names = {_item_name(item) for item in pantry_items if _item_name(item)}
     preferred = [meal for meal in MEAL_TEMPLATES if meal["profile"] == profile["id"]]
     fallback = [meal for meal in MEAL_TEMPLATES if meal not in preferred]

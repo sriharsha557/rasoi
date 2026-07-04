@@ -9,10 +9,8 @@ Orchestrates the missing-ingredient upsell decision:
      products, then attach a Collect&Go search link to each as a stand-in
      "shop" action until the real product-page API is wired in.
 
-NOTE: onboarding budgets are entered in ₹ (the rest of the app is India-
-focused) while the Collect&Go catalog is priced in €. The thresholds below
-are illustrative bands, not a currency conversion — good enough to pick a
-sensible tier, not to compare actual prices across currencies.
+Onboarding budgets and the Collect&Go catalog are both in € — the bands
+below are illustrative per-person/month spend tiers, not a precise model.
 """
 
 from urllib.parse import quote_plus
@@ -24,15 +22,15 @@ DEFAULT_CUSTOMER_ID = "CUST001"
 
 
 def _mix_from_budget(budget_amount: float, budget_period: str, family_size: int) -> dict[str, int]:
-    """Map a stated pantry budget to a brand-tier mix (illustrative bands, not currency-converted)."""
+    """Map a stated pantry budget (€) to a brand-tier mix (illustrative bands)."""
     monthly = budget_amount if budget_period == "monthly" else budget_amount * 4.33
     per_person = monthly / max(family_size, 1)
 
-    if per_person < 1500:
+    if per_person < 60:
         return {"Everyday": 2, "Boni Selection": 1}
-    if per_person < 3000:
+    if per_person < 120:
         return {"Everyday": 1, "Boni Selection": 1, "Boni Bio": 1}
-    if per_person < 5000:
+    if per_person < 200:
         return {"Boni Selection": 1, "Boni Bio": 1, "Nationaal A-merk": 1}
     return {"Boni Bio": 1, "Bio-Time": 1, "Nationaal A-merk": 1}
 

@@ -130,7 +130,7 @@ export default function ReceiptScanUpload({ onScanComplete }) {
               type="text"
               value={storeName}
               onChange={(e) => setStoreName(e.target.value)}
-              placeholder="e.g. Big Bazaar"
+              placeholder="e.g. Colruyt"
               disabled={isUploading}
               className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-rasoi/40"
             />
@@ -252,7 +252,7 @@ export default function ReceiptScanUpload({ onScanComplete }) {
                 <p className="text-xs text-gray-500">{result.scanDate}</p>
               </div>
               <p className="text-lg font-bold text-rasoi-dark">
-                ₹{Number(result.totalAmount ?? 0).toFixed(2)}
+                €{Number(result.totalAmount ?? 0).toFixed(2)}
               </p>
             </div>
 
@@ -286,7 +286,7 @@ export default function ReceiptScanUpload({ onScanComplete }) {
                         {item.quantity} {item.unit}
                       </td>
                       <td className="px-3 py-2 text-right font-medium text-gray-900">
-                        ₹{Number(item.total_price ?? 0).toFixed(2)}
+                        €{Number(item.total_price ?? 0).toFixed(2)}
                       </td>
                     </tr>
                   ))}

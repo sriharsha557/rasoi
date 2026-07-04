@@ -238,7 +238,7 @@ export interface CookedResponse {
 }
 
 export interface CuisineProfile {
-  id: 'south_indian' | 'bengali' | 'punjabi' | string;
+  id: 'belgian' | 'mediterranean' | 'asian' | string;
   name: string;
   staples: string[];
   flavor_notes: string[];
@@ -284,7 +284,7 @@ export interface GroceryItem {
 }
 
 export interface DeliveryPartner {
-  id: 'blinkit' | 'zepto' | string;
+  id: 'collectandgo' | string;
   name: string;
   status: string;
   cartUrl: string;

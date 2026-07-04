@@ -22,7 +22,7 @@ router = APIRouter(prefix="/api/history", tags=["history"])
 # Candidate column names for a per-row savings figure on a `smart_substitutions`
 # table/view — schema isn't ours, so we try the plausible names and use the
 # first one present rather than assuming an exact column name.
-_SAVINGS_FIELD_CANDIDATES = ("savings_inr", "potential_savings_inr", "savings", "potential_savings")
+_SAVINGS_FIELD_CANDIDATES = ("savings_eur", "potential_savings_eur", "savings", "potential_savings")
 
 
 @router.get("/receipts")

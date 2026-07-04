@@ -4,16 +4,16 @@ import apiClient from '../services/apiClient';
 import type { BmiCategory, BudgetPeriod, DietType } from '../types';
 
 const CUISINE_OPTIONS = [
-  'South Indian',
-  'North Indian',
-  'Punjabi',
-  'Bengali',
-  'Gujarati',
-  'Maharashtrian',
-  'Chinese',
-  'Continental',
+  'Belgian',
+  'French',
   'Italian',
+  'Mediterranean',
+  'Asian',
+  'Indian',
   'Mexican',
+  'Middle Eastern',
+  'American',
+  'Vegetarian',
 ];
 
 const DIET_OPTIONS: { value: DietType; label: string; emoji: string }[] = [
@@ -259,13 +259,13 @@ export default function OnboardingPage() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Pantry budget</h2>
           <div className="flex gap-3">
             <label className="flex-1 text-sm font-medium text-gray-700">
-              Amount (₹)
+              Amount (€)
               <input
                 type="number"
                 min="0"
                 value={budgetAmount}
                 onChange={(e) => setBudgetAmount(e.target.value)}
-                placeholder="3000"
+                placeholder="150"
                 className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-rasoi/40"
               />
             </label>

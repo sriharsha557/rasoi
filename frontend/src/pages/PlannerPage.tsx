@@ -5,15 +5,15 @@ import apiClient from '../services/apiClient';
 import type { CuisineProfile, WeeklyPlannerResponse } from '../types';
 
 const REGION_LABELS: Record<string, string> = {
-  south_indian: 'South Indian',
-  bengali: 'Bengali',
-  punjabi: 'Punjabi',
+  belgian: 'Belgian',
+  mediterranean: 'Mediterranean',
+  asian: 'Asian',
 };
 
 export default function PlannerPage() {
   const navigate = useNavigate();
   const { dispatch } = useRecipe();
-  const [region, setRegion] = useState('south_indian');
+  const [region, setRegion] = useState('belgian');
   const [householdSize, setHouseholdSize] = useState(2);
   const [profiles, setProfiles] = useState<CuisineProfile[]>([]);
   const [planner, setPlanner] = useState<WeeklyPlannerResponse | null>(null);
@@ -177,7 +177,7 @@ export default function PlannerPage() {
             <section className="bg-white border border-gray-100 rounded-card shadow-card p-5">
               <div className="flex items-center justify-between gap-3">
                 <h2 className="text-lg font-extrabold text-gray-950">Grocery delivery</h2>
-                <span className="text-xs font-bold text-gray-500">Blinkit / Zepto</span>
+                <span className="text-xs font-bold text-gray-500">Collect&Go</span>
               </div>
               <div className="mt-4 space-y-2 max-h-48 overflow-auto pr-1">
                 {groceryItems.length === 0 ? (

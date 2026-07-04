@@ -26,7 +26,7 @@ const CONSISTENCY_STYLES = {
 };
 
 function formatMoney(value) {
-  return `₹${Number(value ?? 0).toFixed(0)}`;
+  return `€${Number(value ?? 0).toFixed(2)}`;
 }
 
 export default function PurchaseHistory() {

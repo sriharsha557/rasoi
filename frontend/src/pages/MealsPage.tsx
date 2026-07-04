@@ -5,16 +5,17 @@ import { useRecipe } from '../context/RecipeContext';
 import recipeService from '../services/recipeService';
 import type { Recipe } from '../types';
 
-type Cuisine = 'any' | 'Indian' | 'South Indian' | 'North Indian' | 'Pan Indian' | 'Italian' | 'Mexican' | 'Quick';
+type Cuisine = 'any' | 'Italian' | 'Mediterranean' | 'Asian' | 'American' | 'Mexican' | 'Indian' | 'Continental' | 'Quick';
 
 const CUISINE_CHIPS: { label: string; value: Cuisine; emoji: string }[] = [
   { label: 'All', value: 'any', emoji: '🍽️' },
-  { label: 'Indian', value: 'Indian', emoji: '🍛' },
-  { label: 'South Indian', value: 'South Indian', emoji: '🥥' },
-  { label: 'North Indian', value: 'North Indian', emoji: '🫓' },
-  { label: 'Pan Indian', value: 'Pan Indian', emoji: '🥘' },
   { label: 'Italian', value: 'Italian', emoji: '🍝' },
+  { label: 'Mediterranean', value: 'Mediterranean', emoji: '🫒' },
+  { label: 'Asian', value: 'Asian', emoji: '🍜' },
+  { label: 'American', value: 'American', emoji: '🍔' },
   { label: 'Mexican', value: 'Mexican', emoji: '🌮' },
+  { label: 'Indian', value: 'Indian', emoji: '🍛' },
+  { label: 'Continental', value: 'Continental', emoji: '🥘' },
   { label: 'Quick (<20 min)', value: 'Quick', emoji: '⚡' },
 ];
 

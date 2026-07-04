@@ -1,8 +1,8 @@
 """
 Recipe Service — Meal recommendation and recipe catalogue queries.
 
-Indian recipes are served from Supabase tables. Continental recipes that are not
-owned in the local catalogue continue to use Spoonacular.
+Recipes in the local catalogue (Supabase tables) are served directly; any
+cuisine not owned locally falls back to Spoonacular's global recipe catalogue.
 """
 
 import httpx
@@ -87,19 +87,6 @@ async def _supabase_get(table: str, params: dict[str, Any]) -> list[dict[str, An
         )
         response.raise_for_status()
         return response.json()
-
-
-def _is_indian_cuisine(cuisine: str | None) -> bool:
-    return (cuisine or "").strip().lower().replace("_", " ") in {
-        "indian",
-        "south indian",
-        "north indian",
-        "pan indian",
-        "punjabi",
-        "bengali",
-        "gujarati",
-        "maharashtrian",
-    }
 
 
 def _normalise_name(value: str) -> str:
