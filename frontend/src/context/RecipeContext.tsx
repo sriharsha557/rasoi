@@ -1,5 +1,5 @@
 /**
- * RasOI Kitchen Intelligence - Recipe Context Provider
+ * Food Buddy Kitchen Intelligence - Recipe Context Provider
  * 
  * Global state management for recipe recommendations and cooking flow using React Context + useReducer.
  * Provides centralized state for recipe list, selected recipe, and step navigation.

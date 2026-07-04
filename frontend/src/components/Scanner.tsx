@@ -1,5 +1,5 @@
 /**
- * RasOI Kitchen Intelligence - Scanner Component
+ * Food Buddy Kitchen Intelligence - Scanner Component
  * 
  * Image upload interface for scanning ingredients and grocery receipts.
  * Supports drag-and-drop, image preview, file validation, and API integration.
@@ -196,8 +196,9 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
           updatedAt: new Date().toISOString(),
         }));
 
-        // Update pantry context
-        dispatch({ type: 'ADD_ITEMS', payload: pantryItems });
+        // Replace the session pantry with this scan's items (a scan overwrites
+        // the previous session; use ADD via a dedicated "add more" flow instead).
+        dispatch({ type: 'SET_ITEMS', payload: pantryItems });
 
         // Show success message
         const itemCount = response.ingredients.length;
@@ -416,7 +417,7 @@ export default function Scanner({ onScanComplete, onScanError, initialScanType }
               </label>
             )}
             <p className="mt-2 text-xs text-rasoi-dark/70">
-              If you are not sure, RasOI will estimate expiry dates from the ingredient type.
+              If you are not sure, Food Buddy will estimate expiry dates from the ingredient type.
             </p>
           </div>
         )}

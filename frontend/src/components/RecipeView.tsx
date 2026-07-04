@@ -1,5 +1,5 @@
 /**
- * RasOI Kitchen Intelligence - RecipeView Component
+ * Food Buddy Kitchen Intelligence - RecipeView Component
  * 
  * Step-by-step cooking interface with navigation, ingredient availability tracking,
  * and substitution suggestions for missing ingredients.

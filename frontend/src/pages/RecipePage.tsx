@@ -4,7 +4,7 @@ import { usePantry } from '../context/PantryContext';
 import { useRecipe } from '../context/RecipeContext';
 import apiClient from '../services/apiClient';
 import recipeService from '../services/recipeService';
-import type { RecipeStep, Substitution } from '../types';
+import type { RecipeStep, SubstitutionsResponse } from '../types';
 
 function NutritionStat({ label, value }: { label: string; value: string }) {
   return (
@@ -28,7 +28,7 @@ export default function RecipePage() {
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set());
   const [markedCooked, setMarkedCooked] = useState(false);
   // Substitutions
-  const [substitutions, setSubstitutions] = useState<Record<string, Substitution[]>>({});
+  const [substitutions, setSubstitutions] = useState<Record<string, SubstitutionsResponse>>({});
   const [expandedSub, setExpandedSub] = useState<string | null>(null);
   const [loadingSub, setLoadingSub] = useState<string | null>(null);
   const [isLoadingRecipe, setIsLoadingRecipe] = useState(false);
@@ -182,7 +182,7 @@ export default function RecipePage() {
         missingIngredient: missingIng,
         recipeContext: currentRecipe.name,
       });
-      setSubstitutions((prev) => ({ ...prev, [missingIng]: res.substitutions }));
+      setSubstitutions((prev) => ({ ...prev, [missingIng]: res }));
       setExpandedSub(missingIng);
     } catch {
       // swallow
@@ -312,13 +312,26 @@ export default function RecipePage() {
                       </button>
                       {expandedSub === miss && substitutions[miss] && (
                         <div className="px-3 pb-3 space-y-2 animate-fade-in">
-                          {substitutions[miss].map((sub, i) => (
-                            <div key={i} className="bg-white rounded-lg p-2.5 text-xs text-gray-700 border border-rasoi-amber/20">
-                              <p className="font-semibold text-gray-900">{sub.ingredient}</p>
-                              <p className="text-gray-500 mt-0.5">{sub.ratio}</p>
-                              {sub.notes && <p className="text-gray-400 italic mt-0.5">{sub.notes}</p>}
+                          {substitutions[miss].recommend_purchase ? (
+                            <div className="bg-white rounded-lg p-2.5 text-xs border border-rasoi-amber/20">
+                              <p className="font-semibold text-gray-900">No good substitute — best to buy it</p>
+                              {substitutions[miss].purchase_reason && (
+                                <p className="text-gray-500 mt-0.5">{substitutions[miss].purchase_reason}</p>
+                              )}
                             </div>
-                          ))}
+                          ) : substitutions[miss].substitutions.length > 0 ? (
+                            substitutions[miss].substitutions.map((sub, i) => (
+                              <div key={i} className="bg-white rounded-lg p-2.5 text-xs text-gray-700 border border-rasoi-amber/20">
+                                <p className="font-semibold text-gray-900">{sub.ingredient}</p>
+                                <p className="text-gray-500 mt-0.5">{sub.ratio}</p>
+                                {sub.notes && <p className="text-gray-400 italic mt-0.5">{sub.notes}</p>}
+                              </div>
+                            ))
+                          ) : (
+                            <div className="bg-white rounded-lg p-2.5 text-xs text-gray-500 border border-rasoi-amber/20">
+                              No substitute found for this ingredient.
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>

@@ -11,7 +11,7 @@
     "setup:backend": "cd backend && python -m venv venv && venv\\Scripts\\pip install -r requirements.txt",
     "lint:frontend": "cd frontend && npm run lint"
   },
-  "description": "RasOI Kitchen Intelligence - Monorepo for frontend and backend",
+  "description": "Food Buddy Kitchen Intelligence - Monorepo for frontend and backend",
   "repository": {
     "type": "git",
     "url": "https://github.com/yourusername/rasoi"
@@ -24,6 +24,6 @@
     "react",
     "fastapi"
   ],
-  "author": "RasOI Team",
+  "author": "Food Buddy Team",
   "license": "PROPRIETARY"
 }

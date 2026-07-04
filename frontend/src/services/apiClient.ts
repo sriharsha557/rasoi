@@ -1,5 +1,5 @@
 /**
- * RasOI Kitchen Intelligence - API Client Service
+ * Food Buddy Kitchen Intelligence - API Client Service
  * 
  * This module provides a centralized Axios-based API client for communicating
  * with the FastAPI backend. Includes error handling, request/response transformations,
@@ -242,6 +242,9 @@ const apiClient = {
         diet: filters.diet,
         max_ready_time: filters.maxReadyTime,
       },
+      // AI-generated (cuisine=any) recommendations can take 30-45s, well beyond
+      // the default 30s timeout. Allow extra time for this call specifically.
+      timeout: 90000,
     });
     return response.data;
   },

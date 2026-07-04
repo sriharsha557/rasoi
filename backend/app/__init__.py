@@ -1,3 +1,3 @@
 """
-RasOI Backend Application Package
+Food Buddy Backend Application Package
 """

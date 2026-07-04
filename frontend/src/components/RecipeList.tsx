@@ -1,5 +1,5 @@
 /**
- * RasOI Kitchen Intelligence - RecipeList Component
+ * Food Buddy Kitchen Intelligence - RecipeList Component
  * 
  * Displays meal recommendation cards with ingredient matching and expiration indicators.
  * Provides navigation to detailed recipe view for selected recipes.

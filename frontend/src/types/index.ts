@@ -1,5 +1,5 @@
 /**
- * RasOI Kitchen Intelligence - TypeScript Type Definitions
+ * Food Buddy Kitchen Intelligence - TypeScript Type Definitions
  * 
  * This module defines all TypeScript interfaces used throughout the frontend
  * application for type safety and API contracts.
@@ -9,7 +9,7 @@
 
 /**
  * Pantry Item interface representing an ingredient in the session pantry
- * (the user's most recent scan — RasOI does not persist a live, continuously
+ * (the user's most recent scan — Food Buddy does not persist a live, continuously
  * -tracked inventory, so there's no expiry status or created/updated timestamps).
  *
  * Validates: Requirement 2.1 - Pantry inventory data structure
@@ -175,6 +175,9 @@ export interface RecipesResponse {
 
 export interface SubstitutionsResponse {
   substitutions: Substitution[];
+  recommend_purchase?: boolean;
+  purchase_reason?: string;
+  core_function?: string;
 }
 
 export interface HealthCheckResponse {
@@ -308,7 +311,7 @@ export interface DeliveryPartnersResponse {
 }
 
 /**
- * Onboarding preferences for the (single, demo) RasOI user.
+ * Onboarding preferences for the (single, demo) Food Buddy user.
  */
 export type DietType = 'vegetarian' | 'non_vegetarian' | 'eggetarian' | 'vegan';
 export type BudgetPeriod = 'weekly' | 'monthly';

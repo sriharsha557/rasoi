@@ -132,6 +132,12 @@ export default function LandingPage() {
   };
 
   const handleStartFresh = () => {
+    // Clear any previously scanned session so the fresh scan starts empty.
+    dispatch({ type: 'SET_ITEMS', payload: [] });
+    dispatch({
+      type: 'SET_SESSION',
+      payload: { hasLastScan: false, scanDate: null, scanType: null },
+    });
     setSessionPrompt(null);
     navigate('/scan');
   };
@@ -184,15 +190,15 @@ export default function LandingPage() {
         {/* Badge */}
         <div className="anim-a relative z-10 inline-flex items-center gap-2 bg-rasoi-light text-rasoi-dark text-xs font-semibold tracking-widest uppercase px-3 py-1.5 rounded-full mb-5">
           <span className="landing-shimmer w-1.5 h-1.5 rounded-full bg-rasoi" />
-          Organic Intelligence
+          End the daily 'what to cook' struggle
         </div>
 
         {/* Logo */}
         <div className="anim-b relative z-10 mb-3">
           <h1 className="text-6xl sm:text-7xl font-bold text-gray-900" style={{ letterSpacing: '-2px', lineHeight: 1 }}>
-            Ras
+            Food
             <span className="text-rasoi relative inline-block">
-              OI
+              Buddy
               <span className="landing-pulse-ring absolute rounded-md border-2 border-rasoi" style={{ inset: '-4px' }} />
             </span>
           </h1>
@@ -266,7 +272,7 @@ export default function LandingPage() {
 
       {/* ── How it works ── */}
       <section className="bg-rasoi-panel border-t border-gray-100 py-12 px-6">
-        <p className="text-center text-xl font-semibold text-gray-800 mb-1">How RasOI works</p>
+        <p className="text-center text-xl font-semibold text-gray-800 mb-1">How Food Buddy works</p>
         <p className="text-center text-xs text-gray-400 mb-8">Six steps. One decision made for you.</p>
         <div className="flex flex-wrap items-start justify-center gap-x-2 gap-y-6 max-w-4xl mx-auto">
           {STEPS.map((step, idx) => (
@@ -309,7 +315,7 @@ export default function LandingPage() {
 
       {/* ── Footer ── */}
       <footer className="py-5 text-center text-[11px] text-gray-400 border-t border-gray-100">
-        RasOI &nbsp;·&nbsp; Powered by Organic Intelligence &nbsp;·&nbsp; Colruyt Group India Hackathon 2025
+        Food Buddy &nbsp;·&nbsp; End the daily 'what to cook' struggle &nbsp;·&nbsp; Colruyt Group India Hackathon 2025
       </footer>
 
       {/* ── Welcome back / start fresh prompt ── */}

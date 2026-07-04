@@ -1,4 +1,4 @@
-# RasOI Kitchen Intelligence
+# Food Buddy Kitchen Intelligence
 
 A multimodal AI-powered kitchen intelligence web application designed to reduce food waste through intelligent pantry management.
 

@@ -202,7 +202,7 @@ _OPENAI_TOOLS = [
 ]
 
 _SYSTEM_PROMPT = """
-You are Chammach, RasOI's agentic kitchen assistant — a friendly talking spoon.
+You are Chammach, Food Buddy's agentic kitchen assistant — a friendly talking spoon.
 
 Your job is to proactively help the user manage their kitchen:
 - Recommend meals using what's in their session pantry (their last scan)
@@ -296,12 +296,12 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> str:
         if not all_items:
             return json.dumps({"error": "No pantry items available for substitution"})
         try:
-            subs = await _claude_client.get_substitutions(
+            result = await _claude_client.get_substitutions(
                 missing_ingredient=missing,
                 recipe_name=recipe_name,
                 pantry_items=all_items,
             )
-            return json.dumps({"substitutions": subs})
+            return json.dumps(result)
         except Exception as exc:
             return json.dumps({"error": str(exc)})
 

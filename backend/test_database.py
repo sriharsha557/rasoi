@@ -10,7 +10,7 @@ from app.database import get_database, get_repository
 async def test_database():
     """Test database creation, CRUD operations, and schema features."""
     
-    print("Testing RasOI Database and Repository...")
+    print("Testing Food Buddy Database and Repository...")
     print("=" * 50)
     
     # Initialize database

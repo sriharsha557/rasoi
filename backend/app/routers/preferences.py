@@ -1,7 +1,7 @@
 """
 Preferences router — GET/PUT /api/preferences
 
-Onboarding data for RasOI's single demo user (Rasoi Raja): cuisine picks,
+Onboarding data for Food Buddy's single demo user (Rasoi Raja): cuisine picks,
 diet type, height/weight (BMI computed server-side), family size, and a
 weekly or monthly pantry budget.
 

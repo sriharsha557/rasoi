@@ -1,5 +1,5 @@
 /**
- * RasOI Kitchen Intelligence - Pantry Context Provider
+ * Food Buddy Kitchen Intelligence - Pantry Context Provider
  * 
  * Global state management for pantry inventory using React Context + useReducer.
  * Provides centralized state for pantry items with loading and error handling.

@@ -25,7 +25,7 @@ def _attach_expiry_flags(item: dict) -> dict:
     """
     Normalise a session-pantry item to the camelCase shape the frontend and
     recipe/substitution services expect. isExpiring/isExpired are always
-    False — RasOI stopped continuously tracking expiry (see PRD "session-based
+    False — Food Buddy stopped continuously tracking expiry (see PRD "session-based
     pantry"): the expiration_date below is still whatever the vision model
     estimated at scan time, just not live-monitored afterwards.
     """

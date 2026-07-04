@@ -1,1 +1,1 @@
-"""Tests for RasOI backend."""
+"""Tests for Food Buddy backend."""

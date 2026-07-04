@@ -1,9 +1,9 @@
 """
-Database connection and schema management for RasOI.
+Database connection and schema management for Food Buddy.
 
 Local SQLite holds cook_history (what the user cooked, for Chammach memory)
 and user_preferences (onboarding). The pantry itself is session-based and
-lives in Supabase's user_last_scan table (see LastScanRepository) — RasOI
+lives in Supabase's user_last_scan table (see LastScanRepository) — Food Buddy
 does not persist a live, continuously-tracked ingredient inventory.
 """
 

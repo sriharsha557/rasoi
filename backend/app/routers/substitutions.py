@@ -36,7 +36,7 @@ async def substitute(body: SubstitutionRequest):
     pantry = await get_session_pantry_items(DEMO_USER_ID)
 
     try:
-        subs = await claude_client.get_substitutions(
+        result = await claude_client.get_substitutions(
             missing_ingredient=missing,
             recipe_name=context,
             pantry_items=pantry,
@@ -47,7 +47,12 @@ async def substitute(body: SubstitutionRequest):
         raise HTTPException(status_code=502, detail=f"Substitution lookup failed: {e}")
 
     # 14.2: Filter toxic suggestions + flag allergens
-    subs = guardrails.filter_toxic_substitutes(subs)
+    subs = guardrails.filter_toxic_substitutes(result.get("substitutions", []))
     subs = guardrails.flag_allergens(subs)
 
-    return {"substitutions": subs}
+    return {
+        "substitutions": subs,
+        "recommend_purchase": bool(result.get("recommend_purchase")) and not subs,
+        "purchase_reason": result.get("purchase_reason", ""),
+        "core_function": result.get("core_function", ""),
+    }

@@ -1,5 +1,5 @@
 """
-RasOI Guardrails — PRD §14
+Food Buddy Guardrails — PRD §14
 Centralised safety and validation logic covering:
 
   14.1 Input guardrails   — non-food images, prompt injection, oversized files

@@ -1,5 +1,5 @@
 """
-RasOI Backend - FastAPI Application Entry Point
+Food Buddy Backend - FastAPI Application Entry Point
 """
 from fastapi import FastAPI, Request, status
 from fastapi.responses import JSONResponse
@@ -27,19 +27,19 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI):
     """Initialise SQLite DB on startup.
 
-    No hourly expiry checker — RasOI's pantry is session-based (last scan
+    No hourly expiry checker — Food Buddy's pantry is session-based (last scan
     only), so there's no persisted, continuously-tracked inventory to poll
     for expiring/low-stock items. Chammach now fires on explicit triggers
     (scan complete, recipe cooked, user action) instead.
     """
-    logger.info("Initialising RasOI database…")
+    logger.info("Initialising Food Buddy database…")
     await get_database()
     logger.info("Database ready.")
     yield
 
 
 app = FastAPI(
-    title="RasOI Kitchen Intelligence API",
+    title="Food Buddy Kitchen Intelligence API",
     description="AI-powered kitchen intelligence — reducing food waste one meal at a time.",
     version="1.0.0",
     lifespan=lifespan,
@@ -175,9 +175,9 @@ app.include_router(chammach_router)
 @app.get("/")
 async def root():
     return {
-        "app": "RasOI",
+        "app": "Food Buddy",
         "version": "1.0.0",
-        "tagline": "Powered by Organic Intelligence",
+        "tagline": "Your smart kitchen assistant",
         "docs": "/docs",
     }
 

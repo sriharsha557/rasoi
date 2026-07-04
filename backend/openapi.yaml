@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: RasOI Kitchen Intelligence API
+  title: Food Buddy Kitchen Intelligence API
   description: >-
     AI-powered kitchen intelligence — scan ingredients, manage a pantry, get
     pantry-based recipe recommendations, ingredient substitutions, meal
@@ -55,7 +55,7 @@ paths:
               schema:
                 type: object
                 properties:
-                  app: { type: string, example: RasOI }
+                  app: { type: string, example: Food Buddy }
                   version: { type: string, example: 1.0.0 }
                   tagline: { type: string }
                   docs: { type: string, example: /docs }

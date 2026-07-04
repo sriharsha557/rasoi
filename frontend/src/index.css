@@ -26,7 +26,7 @@
   }
 }
 
-/* ── RasOI colour utilities (guaranteed fallback) ─────────────────── */
+/* ── Food Buddy colour utilities (guaranteed fallback) ─────────────────── */
 /* These mirror the Tailwind custom colour config so classes always    */
 /* resolve even if the JIT scanner misses a file.                      */
 @layer utilities {

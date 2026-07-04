@@ -1,7 +1,7 @@
 """
 Shared OpenAI / Azure AI Foundry configuration.
 
-RasOI uses an OpenAI-compatible endpoint (Azure AI Foundry v1 API). The OpenAI
+Food Buddy uses an OpenAI-compatible endpoint (Azure AI Foundry v1 API). The OpenAI
 Python SDK talks to it directly by pointing ``base_url`` at the ``/openai/v1``
 path and passing the API key.
 

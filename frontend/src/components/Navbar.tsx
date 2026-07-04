@@ -11,10 +11,10 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/" className="flex items-center gap-2 group">
           <span className="text-2xl font-extrabold tracking-tight text-gray-900 group-hover:text-rasoi transition-colors">
-            Ras<span className="text-rasoi">OI</span>
+            Food<span className="text-rasoi">Buddy</span>
           </span>
           <span className="hidden sm:inline-block text-[10px] font-semibold uppercase tracking-widest text-gray-400 mt-0.5">
-            Organic Intelligence
+            End the daily 'what to cook' struggle
           </span>
         </Link>
 

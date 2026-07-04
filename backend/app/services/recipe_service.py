@@ -438,11 +438,13 @@ async def get_recipes(
     elif cuisine_value.lower() == "any":
         # "What can I cook" — generate recipes that actually use the pantry
         # items via the AI model, then recompute matches against the pantry.
+        # Capped at 3 diverse recipes (keeps latency down and results varied).
+        ai_count = min(max_recipes, 3)
         try:
             ai_recipes = await claude_client.get_recipe_recommendations(
                 pantry_items=pantry_items,
                 prioritize_expiring=prioritize_expiring,
-                max_recipes=max_recipes,
+                max_recipes=ai_count,
                 cuisine=cuisine_value,
             )
             recipes = [_normalise_ai_recipe(r, pantry_names_norm) for r in (ai_recipes or [])]

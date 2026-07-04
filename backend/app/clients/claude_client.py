@@ -145,7 +145,7 @@ async def get_recipe_recommendations(
     expiring_names = [i["name"] for i in expiring]
 
     pantry_text = "\n".join(
-        f"- {item['name']}: {item['quantity']} {item['unit']}"
+        f"- {item['name']}: {item.get('quantity', '')} {item.get('unit', '')}".rstrip()
         + (" [EXPIRING SOON]" if item.get("isExpiring") or item.get("isExpired") else "")
         for item in pantry_items
     )
@@ -163,7 +163,7 @@ async def get_recipe_recommendations(
         else ""
     )
 
-    prompt = f"""You are RasOI, a kitchen AI. Given this pantry, suggest {max_recipes} meal recipes.
+    prompt = f"""You are Food Buddy, a kitchen AI. Given this pantry, suggest {max_recipes} meal recipes.
 {priority_note}
 {cuisine_note}
 
@@ -193,6 +193,10 @@ Rules:
 - matchPercentage: % of recipe ingredients available in pantry (0-100)
 - usesExpiringItems: true if at least one expiring item is used
 - steps: 4-7 clear cooking steps
+- DIVERSITY: make the {max_recipes} recipes genuinely different from each other —
+  vary the cuisine, meal type, and cooking method, and collectively use a wide
+  range of the available pantry ingredients instead of repeating the same core
+  items in every recipe.
 - Sort by matchPercentage descending (expiring-using recipes first if prioritize_expiring)
 """
 
@@ -212,31 +216,90 @@ async def get_substitutions(
     missing_ingredient: str,
     recipe_name: str,
     pantry_items: list[dict],
-) -> list[dict]:
+    quantity: str = "not specified",
+    usage_context: str = "not specified",
+    recipe_ingredients: list[str] | None = None,
+) -> dict:
     """
-    Ask Claude to suggest pantry-available substitutes for a missing ingredient.
+    Decide whether a missing ingredient has a genuine functional substitute, or
+    whether the user should be prompted to purchase it instead.
 
-    Returns list of { ingredient, ratio, notes, available }.
+    Returns a dict:
+        {
+          "core_function": str,
+          "has_substitutions": bool,
+          "substitutions": [ {ingredient, ratio, notes, available} ],
+          "recommend_purchase": bool,
+          "purchase_reason": str,
+        }
+
+    `substitutions` are mapped from the model's {name, ratio, benefit, limitation}
+    so downstream code (guardrails, frontend) keeps the {ingredient, ratio, notes,
+    available} shape. `available` is true when the substitute is already in the
+    pantry. `recommend_purchase` and `has_substitutions` are mutually exclusive.
     """
     client = get_async_client()
 
-    pantry_names = [i["name"] for i in pantry_items]
+    pantry_names = [i.get("name", "") for i in pantry_items]
+    pantry_list = ", ".join(n for n in pantry_names if n) or "none"
+    ingredient_list = ", ".join(recipe_ingredients) if recipe_ingredients else "not specified"
 
-    prompt = f"""You are a kitchen AI. The recipe "{recipe_name}" needs "{missing_ingredient}" but it's not available.
+    prompt = f"""You are a culinary substitution assistant. Given a missing ingredient and
+its role in a recipe, decide whether it has a genuine functional substitute
+available from a typical pantry, OR whether the user should be prompted to
+purchase/order the ingredient instead.
 
-Available pantry items: {", ".join(pantry_names) if pantry_names else "none"}
+Recipe: {recipe_name}
+Missing ingredient: {missing_ingredient}
+Quantity needed: {quantity}
+How it's used in this recipe: {usage_context}
+Other ingredients in the recipe: {ingredient_list}
+User's available pantry items: {pantry_list}
 
-Suggest 1-3 substitutes. Return ONLY a JSON array:
-[
-  {{
-    "ingredient": "substitute name",
-    "ratio": "use X amount of substitute per Y of original",
-    "notes": "brief explanation of taste/texture difference",
-    "available": true
-  }}
-]
+Decision process:
+1. Identify the CORE FUNCTION the missing ingredient serves in this recipe
+   (e.g. aromatic base, heat/spice, acidity, binding, bulk/texture,
+   sweetness, umami).
+2. Check if any realistic pantry substitute can replicate that SAME core
+   function closely enough that the dish still works as intended.
+3. Ingredients with a narrow, hard-to-replace role (e.g. onion's aromatic
+   savory base, garlic's pungency, a specific spice's flavor signature)
+   usually do NOT have a good substitute — do not force one just because
+   two things are both vegetables or both spicy.
+4. Ingredients with a more flexible/replaceable role (e.g. one chili
+   variety for heat, one leafy green for another, one acid for another)
+   often DO have reasonable substitutes.
 
-Prefer substitutes available in the pantry (available: true). If none fit, suggest common pantry staples (available: false).
+Rules:
+- If a genuine substitute exists, return it under "substitutions" with an
+  honest tradeoff description.
+- If no ingredient can reasonably replicate the missing ingredient's core
+  function, set "recommend_purchase" to true instead of forcing a weak
+  substitution. Do not populate "substitutions" in this case.
+- Never suggest a substitute just because it's "in the same category"
+  (e.g. carrots and spinach are not onion substitutes just because
+  they're vegetables — they don't replicate onion's aromatic/savory role).
+- Maximum 1-2 substitutions if genuinely valid, ranked by closeness of fit.
+
+Respond ONLY with valid JSON, no other text:
+
+{{
+  "core_function": "string (what role the ingredient plays in this recipe)",
+  "has_substitutions": true or false,
+  "substitutions": [
+    {{
+      "name": "string",
+      "ratio": "string",
+      "benefit": "string",
+      "limitation": "string"
+    }}
+  ],
+  "recommend_purchase": true or false,
+  "purchase_reason": "string (only if recommend_purchase is true — brief, e.g. 'Onion's savory aromatic base can't be replicated by other pantry staples in this recipe.')"
+}}
+
+recommend_purchase and has_substitutions are mutually exclusive — exactly
+one should reflect the real answer, never both true.
 """
 
     response = await client.chat.completions.create(
@@ -248,4 +311,41 @@ Prefer substitutes available in the pantry (available: true). If none fit, sugge
 
     raw = response.choices[0].message.content
     result = _parse_json_response(raw)
-    return result if isinstance(result, list) else []
+
+    if not isinstance(result, dict):
+        # Legacy/unexpected shape (bare array) — treat as substitutions list.
+        result = {"substitutions": result if isinstance(result, list) else []}
+
+    recommend_purchase = bool(result.get("recommend_purchase", False))
+    raw_subs = [] if recommend_purchase else (result.get("substitutions") or [])
+
+    pantry_lower = [p.lower() for p in pantry_names if p]
+    mapped: list[dict] = []
+    for sub in raw_subs:
+        if not isinstance(sub, dict):
+            continue
+        name = sub.get("name") or sub.get("ingredient") or ""
+        if not name:
+            continue
+        benefit = (sub.get("benefit") or "").strip()
+        limitation = (sub.get("limitation") or "").strip()
+        notes = sub.get("notes") or benefit
+        if limitation:
+            notes = f"{notes} Limitation: {limitation}".strip()
+        name_lower = name.lower()
+        available = any(name_lower in p or p in name_lower for p in pantry_lower)
+        mapped.append({
+            "ingredient": name,
+            "ratio": sub.get("ratio", ""),
+            "notes": notes,
+            "available": available,
+        })
+
+    return {
+        "core_function": result.get("core_function", ""),
+        "has_substitutions": bool(mapped),
+        "substitutions": mapped,
+        "recommend_purchase": recommend_purchase and not mapped,
+        "purchase_reason": result.get("purchase_reason", "") if recommend_purchase else "",
+    }
+
