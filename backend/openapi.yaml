@@ -4,16 +4,16 @@ info:
   description: >-
     AI-powered kitchen intelligence — scan ingredients, manage a pantry, get
     pantry-based recipe recommendations, ingredient substitutions, meal
-    planning, and the Chammach agentic assistant.
+    planning, and the Buddy agentic assistant.
 
 
-    Note: the real-time Chammach assistant is also exposed over a WebSocket at
-    `GET /ws/chammach` (not expressible in OpenAPI). Clients send JSON messages
-    like `{"trigger": "user_action"}` and receive `ChammachEvent` payloads.
+    Note: the real-time Buddy assistant is also exposed over a WebSocket at
+    `GET /ws/buddy` (not expressible in OpenAPI). Clients send JSON messages
+    like `{"trigger": "user_action"}` and receive `BuddyEvent` payloads.
 
 
     A legacy-prefix middleware maps unprefixed paths (e.g. `/pantry`, `/recipes`,
-    `/scan`, `/substitute`, `/planner`, `/chammach`) to their `/api/...`
+    `/scan`, `/substitute`, `/planner`, `/buddy`) to their `/api/...`
     equivalents.
   version: 1.0.0
   license:
@@ -38,7 +38,7 @@ tags:
     description: Ingredient substitutions
   - name: planner
     description: Weekly planner, household, grocery, cuisine profiles
-  - name: chammach
+  - name: buddy
     description: Agentic kitchen assistant
 
 paths:
@@ -527,10 +527,10 @@ paths:
                     type: array
                     items: { type: object }
 
-  /api/chammach/trigger:
+  /api/buddy/trigger:
     post:
-      tags: [chammach]
-      summary: Manually trigger the Chammach agent loop
+      tags: [buddy]
+      summary: Manually trigger the Buddy agent loop
       operationId: triggerAgent
       parameters:
         - name: trigger
@@ -702,9 +702,9 @@ components:
         notes: { type: string }
         available: { type: boolean }
 
-    ChammachEvent:
+    BuddyEvent:
       type: object
-      description: Message pushed over the /ws/chammach WebSocket
+      description: Message pushed over the /ws/buddy WebSocket
       properties:
         type:
           type: string

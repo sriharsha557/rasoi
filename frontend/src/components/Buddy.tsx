@@ -36,7 +36,7 @@ function getDialogue(
   return { text: "I'm here if you need me!", emoji: '🥄' };
 }
 
-export default function Chammach() {
+export default function Buddy() {
   const { pathname } = useLocation();
   const { state: pantryState } = usePantry();
   const { state: recipeState } = useRecipe();
@@ -67,7 +67,7 @@ export default function Chammach() {
   }, []);
 
   return (
-    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2 select-none" role="complementary" aria-label="Chammach assistant">
+    <div className="fixed bottom-5 right-5 z-50 flex flex-col items-end gap-2 select-none" role="complementary" aria-label="Buddy assistant">
       {visible && (
         <div key={msgKey} className="animate-fade-in relative max-w-[230px] bg-white border border-gray-200 shadow-card rounded-card px-3.5 py-2.5 text-sm text-gray-800 font-medium leading-snug">
           <span className="mr-1">{demoMsg.emoji}</span>
@@ -75,7 +75,7 @@ export default function Chammach() {
           <div className="absolute -bottom-[7px] right-9 w-3 h-3 bg-white border-r border-b border-gray-200 rotate-45" />
         </div>
       )}
-      <button onClick={showMessage} title="Show Chammach message" aria-label="Chammach talking spoon" className={`focus:outline-none cursor-pointer ${wiggling ? 'animate-wiggle' : ''}`}>
+      <button onClick={showMessage} title="Show Buddy message" aria-label="Buddy talking spoon" className={`focus:outline-none cursor-pointer ${wiggling ? 'animate-wiggle' : ''}`}>
         <SpoonSVG />
       </button>
     </div>

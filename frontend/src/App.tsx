@@ -4,7 +4,7 @@ import { RecipeProvider } from './context/RecipeContext';
 import { GuestProvider } from './context/GuestContext';
 import Navbar from './components/Navbar';
 import GuestBanner from './components/GuestBanner';
-import Chammach from './components/Chammach';
+import Buddy from './components/Buddy';
 import LandingPage from './pages/LandingPage';
 import OnboardingPage from './pages/OnboardingPage';
 import PurchaseHistory from './pages/PurchaseHistory';
@@ -33,7 +33,7 @@ function App() {
               <Route path="/recipe" element={<RecipePage />} />
               <Route path="/recipe/:id" element={<RecipePage />} />
             </Routes>
-            <Chammach />
+            <Buddy />
           </BrowserRouter>
         </RecipeProvider>
       </PantryProvider>

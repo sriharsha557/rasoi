@@ -169,14 +169,14 @@ async def mark_cooked(
     """
     Called when the user finishes cooking a recipe.
     Removes the used ingredients from the session pantry, saves cook history,
-    and triggers the Chammach agentic loop (PRD §8b.4).
+    and triggers the Buddy agentic loop (PRD §8b.4).
     """
     remaining_items, removed = await remove_session_items(DEMO_USER_ID, body.items_used)
-    # Save to cook_history for Chammach memory (PRD §6b.1)
+    # Save to cook_history for Buddy memory (PRD §6b.1)
     cook_history_repo = await get_cook_history_repository()
     await cook_history_repo.save_cook_history(body.recipe_title, body.items_used)
-    # Trigger Chammach agent loop in background (PRD §8b.4)
-    from app.routers.chammach import run_agent_loop
+    # Trigger Buddy agent loop in background (PRD §8b.4)
+    from app.routers.buddy import run_agent_loop
     background_tasks.add_task(run_agent_loop, "recipe_cooked")
     return {
         "removed": removed,

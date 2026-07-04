@@ -1,12 +1,12 @@
 """
-Chammach Agentic Loop — WebSocket endpoint + background agent.
+Buddy Agentic Loop — WebSocket endpoint + background agent.
 
 Observes the session pantry (last scan) and cook history, calls the model
-with tool_use, and pushes ChammachEvent to all connected WebSocket clients.
+with tool_use, and pushes BuddyEvent to all connected WebSocket clients.
 
 Endpoints:
-  WS   /ws/chammach           — real-time event stream to frontend
-  POST /api/chammach/trigger  — manual/cron trigger for the agent loop
+  WS   /ws/buddy           — real-time event stream to frontend
+  POST /api/buddy/trigger  — manual/cron trigger for the agent loop
 """
 
 import asyncio
@@ -26,12 +26,12 @@ from app.clients.ai_config import get_async_client, get_model
 from app import guardrails
 
 logger = logging.getLogger(__name__)
-router = APIRouter(tags=["chammach"])
+router = APIRouter(tags=["buddy"])
 
 
 # ── Pydantic model ─────────────────────────────────────────────────────────────
 
-class ChammachEvent(BaseModel):
+class BuddyEvent(BaseModel):
     type: str                   # expiry_alert | meal_ready | substitution | idle | low_stock
     dialogue: str
     animation: str              # bounce | wiggle | talk
@@ -52,7 +52,7 @@ class _ConnectionManager:
         if ws in self.active:
             self.active.remove(ws)
 
-    async def broadcast(self, event: ChammachEvent):
+    async def broadcast(self, event: BuddyEvent):
         payload = event.model_dump()
         dead: list[WebSocket] = []
         for ws in self.active:
@@ -168,7 +168,7 @@ _TOOLS = [
             "properties": {
                 "dialogue": {
                     "type": "string",
-                    "description": "Chammach's spoken message (1-2 sentences, friendly)",
+                    "description": "Buddy's spoken message (1-2 sentences, friendly)",
                 },
                 "animation": {
                     "type": "string",
@@ -189,7 +189,7 @@ _TOOLS = [
 ]
 
 _SYSTEM_PROMPT = """
-You are Chammach, Food Buddy's agentic kitchen assistant — a friendly talking spoon.
+You are Buddy, Food Buddy's agentic kitchen assistant — a friendly talking spoon.
 
 Your job is to proactively help the user manage their kitchen:
 - Recommend meals using what's in their session pantry (their last scan)
@@ -353,7 +353,7 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> str:
 
 async def run_agent_loop(trigger: str = "pantry_updated") -> None:
     """
-    One iteration of Chammach's Observe-Think-Plan-Act loop.
+    One iteration of Buddy's Observe-Think-Plan-Act loop.
     Claude decides which tools to call and in what order.
     Terminates when Claude calls notify_user() or after 5 iterations.
 
@@ -361,9 +361,9 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
       - Rule 3: tool budget (max 5 calls)
       - Rule 5: graceful degradation on tool errors
       - Rule 6: audit log per tool call
-      - Rule 7: transparency via validate_chammach_dialogue()
+      - Rule 7: transparency via validate_buddy_dialogue()
     """
-    logger.info("[chammach] Agent loop triggered by: %s", trigger)
+    logger.info("[buddy] Agent loop triggered by: %s", trigger)
 
     client = get_async_client()
     model = get_model()
@@ -375,7 +375,7 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
         },
     ]
 
-    final_event: ChammachEvent | None = None
+    final_event: BuddyEvent | None = None
 
     for _ in range(5):
         response = await client.messages.create(
@@ -390,7 +390,7 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
 
         if not tool_use_blocks:
             text = "".join(block.text for block in response.content if block.type == "text")
-            final_event = ChammachEvent(type="idle", dialogue=(text or "All good in the kitchen!")[:200], animation="bounce")
+            final_event = BuddyEvent(type="idle", dialogue=(text or "All good in the kitchen!")[:200], animation="bounce")
             break
 
         messages.append({"role": "assistant", "content": response.content})
@@ -405,14 +405,14 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
                 tool_name, tool_input
             )
             if not allowed:
-                logger.warning("[chammach-14.3] Blocked tool call: %s — %s", tool_name, rejection_reason)
+                logger.warning("[buddy-14.3] Blocked tool call: %s — %s", tool_name, rejection_reason)
                 result = json.dumps({"error": rejection_reason})
             else:
                 # Rule 5: Graceful degradation — tool errors don't abort the loop
                 try:
                     result = await _execute_tool(tool_name, tool_input)
                 except Exception as tool_exc:
-                    logger.warning("[chammach-14.3] Tool %s failed: %s", tool_name, tool_exc)
+                    logger.warning("[buddy-14.3] Tool %s failed: %s", tool_name, tool_exc)
                     result = json.dumps({"error": f"Tool temporarily unavailable: {tool_exc}"})
 
             # Rule 6: Audit log every call
@@ -433,8 +433,8 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
             if tool_name == "notify_user":
                 inp = tool_input
                 # Rule 7: Transparency — validate and sanitise dialogue
-                dialogue = guardrails.validate_chammach_dialogue(inp.get("dialogue", ""))
-                final_event = ChammachEvent(
+                dialogue = guardrails.validate_buddy_dialogue(inp.get("dialogue", ""))
+                final_event = BuddyEvent(
                     type=inp.get("event_type", "idle"),
                     dialogue=dialogue,
                     animation=inp.get("animation", "bounce"),
@@ -447,25 +447,25 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
             break
 
     if final_event:
-        logger.info("[chammach] Broadcasting: %s", final_event.dialogue)
+        logger.info("[buddy] Broadcasting: %s", final_event.dialogue)
         await manager.broadcast(final_event)
     else:
         await manager.broadcast(
-            ChammachEvent(type="idle", dialogue="Your pantry is all set!", animation="bounce")
+            BuddyEvent(type="idle", dialogue="Your pantry is all set!", animation="bounce")
         )
 
 
 # ── WebSocket endpoint ─────────────────────────────────────────────────────────
 
-@router.websocket("/ws/chammach")
-async def chammach_ws(websocket: WebSocket):
+@router.websocket("/ws/buddy")
+async def buddy_ws(websocket: WebSocket):
     await manager.connect(websocket)
-    logger.info("[chammach] Client connected. Active: %d", len(manager.active))
+    logger.info("[buddy] Client connected. Active: %d", len(manager.active))
     try:
         await websocket.send_json(
-            ChammachEvent(
+            BuddyEvent(
                 type="idle",
-                dialogue="Namaste! I'm Chammach. Show me your fridge and I'll handle the rest!",
+                dialogue="Namaste! I'm Buddy. Show me your fridge and I'll handle the rest!",
                 animation="bounce",
             ).model_dump()
         )
@@ -479,16 +479,16 @@ async def chammach_ws(websocket: WebSocket):
             asyncio.create_task(run_agent_loop(trigger))
     except WebSocketDisconnect:
         manager.disconnect(websocket)
-        logger.info("[chammach] Client disconnected. Active: %d", len(manager.active))
+        logger.info("[buddy] Client disconnected. Active: %d", len(manager.active))
 
 
 # ── HTTP trigger ───────────────────────────────────────────────────────────────
 
-@router.post("/api/chammach/trigger")
+@router.post("/api/buddy/trigger")
 async def trigger_agent(
     background_tasks: BackgroundTasks,
     trigger: str = "manual",
 ):
-    """Manually trigger the Chammach agent loop (cron, post-scan hooks, testing)."""
+    """Manually trigger the Buddy agent loop (cron, post-scan hooks, testing)."""
     background_tasks.add_task(run_agent_loop, trigger)
     return {"status": "agent loop started", "trigger": trigger}

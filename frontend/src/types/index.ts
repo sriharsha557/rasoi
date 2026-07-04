@@ -125,16 +125,16 @@ export interface Substitution {
 }
 
 /**
- * Chammach mascot message context types.
+ * Buddy mascot message context types.
  */
-export type ChammachContext = 'idle' | 'pantry' | 'recipes' | 'cooking';
+export type BuddyContext = 'idle' | 'pantry' | 'recipes' | 'cooking';
 
 /**
- * Chammach message interface for contextual guidance.
+ * Buddy message interface for contextual guidance.
  */
-export interface ChammachMessage {
+export interface BuddyMessage {
   text: string;
-  context: ChammachContext;
+  context: BuddyContext;
   duration: number; // milliseconds
 }
 
@@ -208,9 +208,9 @@ export interface SubstitutionRequest {
 export type ScanType = 'ingredient' | 'receipt';
 
 /**
- * Chammach agent WebSocket event pushed by the backend.
+ * Buddy agent WebSocket event pushed by the backend.
  */
-export interface ChammachEvent {
+export interface BuddyEvent {
   type: 'expiry_alert' | 'meal_ready' | 'substitution' | 'idle' | 'low_stock';
   dialogue: string;
   animation: 'bounce' | 'wiggle' | 'talk';

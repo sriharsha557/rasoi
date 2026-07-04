@@ -76,7 +76,7 @@ const REQUEST_TIMEOUT = 30000; // 30 seconds
 
 /**
  * WebSocket base URL (derived from API base URL, strips /api suffix).
- * Use this to build WebSocket endpoint URLs, e.g. `${WS_BASE_URL}/ws/chammach`.
+ * Use this to build WebSocket endpoint URLs, e.g. `${WS_BASE_URL}/ws/buddy`.
  */
 export const WS_BASE_URL = API_BASE_URL
   .replace(/^https/, 'wss')

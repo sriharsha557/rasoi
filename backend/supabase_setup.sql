@@ -96,7 +96,7 @@ COMMENT ON TABLE public.pantry_scan_history IS
 
 -- ------------------------------------------------------------
 -- 2d. cooked_history
---     What the user cooked and when — powers Chammach memory.
+--     What the user cooked and when — powers Buddy memory.
 --     PRD §6b.1 / §8b.3 get_cook_history tool
 -- ------------------------------------------------------------
 
@@ -112,7 +112,7 @@ CREATE INDEX IF NOT EXISTS idx_cooked_history_user_time
     ON public.cooked_history (user_id, cooked_at DESC);
 
 COMMENT ON TABLE public.cooked_history IS
-    'Cook history for Chammach memory — prevents repeat recommendations (PRD §8b.3)';
+    'Cook history for Buddy memory — prevents repeat recommendations (PRD §8b.3)';
 
 
 -- ------------------------------------------------------------

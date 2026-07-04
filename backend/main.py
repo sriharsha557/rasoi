@@ -14,7 +14,7 @@ from datetime import datetime
 
 from app.database import get_database
 from app.routers import scan, pantry, recipes, substitutions, planner, preferences, receipt, suggest, history, collectandgo
-from app.routers.chammach import router as chammach_router
+from app.routers.buddy import router as buddy_router
 from app.guardrails import demo_preflight_check
 
 load_dotenv()
@@ -29,7 +29,7 @@ async def lifespan(app: FastAPI):
 
     No hourly expiry checker — Food Buddy's pantry is session-based (last scan
     only), so there's no persisted, continuously-tracked inventory to poll
-    for expiring/low-stock items. Chammach now fires on explicit triggers
+    for expiring/low-stock items. Buddy now fires on explicit triggers
     (scan complete, recipe cooked, user action) instead.
     """
     logger.info("Initialising Food Buddy database…")
@@ -80,7 +80,7 @@ async def legacy_api_prefix_middleware(request: Request, call_next):
         "/cuisine-profiles",
         "/household",
         "/grocery",
-        "/chammach",
+        "/buddy",
     )
     if request.url.path.startswith(legacy_prefixes):
         request.scope["path"] = f"/api{request.url.path}"
@@ -169,7 +169,7 @@ app.include_router(receipt.router)
 app.include_router(suggest.router)
 app.include_router(history.router)
 app.include_router(collectandgo.router)
-app.include_router(chammach_router)
+app.include_router(buddy_router)
 
 
 # ── Base routes ───────────────────────────────────────────────────────────────

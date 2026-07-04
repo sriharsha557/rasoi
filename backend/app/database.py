@@ -1,7 +1,7 @@
 """
 Database connection and schema management for Food Buddy.
 
-Local SQLite holds cook_history (what the user cooked, for Chammach memory)
+Local SQLite holds cook_history (what the user cooked, for Buddy memory)
 and user_preferences (onboarding). The pantry itself is session-based and
 lives in Supabase's user_last_scan table (see LastScanRepository) — Food Buddy
 does not persist a live, continuously-tracked ingredient inventory.
@@ -33,7 +33,7 @@ class DatabaseConnection:
     async def initialize(self):
         """Initialize database schema with tables and indexes."""
         async with aiosqlite.connect(self.db_path) as db:
-            # cooked_history table — powers Chammach memory (PRD §6b.1)
+            # cooked_history table — powers Buddy memory (PRD §6b.1)
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS cooked_history (
                     id TEXT PRIMARY KEY,
@@ -79,13 +79,13 @@ class DatabaseConnection:
 
 
 class CookHistoryRepository:
-    """Repository for cooked_history — what the user cooked and when (Chammach memory)."""
+    """Repository for cooked_history — what the user cooked and when (Buddy memory)."""
 
     def __init__(self, db_connection: DatabaseConnection):
         self.db_connection = db_connection
 
     async def save_cook_history(self, recipe_title: str, ingredients_used: list[str]) -> None:
-        """Record a cooked meal in cooked_history for Chammach memory (PRD §6b.1)."""
+        """Record a cooked meal in cooked_history for Buddy memory (PRD §6b.1)."""
         import json as _json
         record_id = str(uuid.uuid4())
         cooked_at = datetime.utcnow().isoformat()

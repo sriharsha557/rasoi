@@ -153,9 +153,9 @@ async def scan_image(
         image_path=image_storage_path or None,
     )
 
-    # Trigger Chammach agentic loop in background — PRD §8b.6 agentic moment #1
+    # Trigger Buddy agentic loop in background — PRD §8b.6 agentic moment #1
     # "Auto-recommend on scan complete — no button click needed"
-    from app.routers.chammach import run_agent_loop
+    from app.routers.buddy import run_agent_loop
     background_tasks.add_task(run_agent_loop, "pantry_scan_completed")
     # Append-only signal for future personalization (cuisine affinity, promotions)
     background_tasks.add_task(repo.log_scan_history, userId, scanType, new_items)

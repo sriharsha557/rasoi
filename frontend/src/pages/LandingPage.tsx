@@ -47,7 +47,7 @@ export default function LandingPage() {
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const dIdxRef = useRef(0);
 
-  const chammachTalk = () => {
+  const buddyTalk = () => {
     dIdxRef.current = (dIdxRef.current + 1) % DIALOGUES.length;
     setDialogue(DIALOGUES[dIdxRef.current]);
     setSpeechVisible(true);
@@ -87,7 +87,7 @@ export default function LandingPage() {
 
   // Auto-talk after 2s
   useEffect(() => {
-    const t = setTimeout(() => chammachTalk(), 2000);
+    const t = setTimeout(() => buddyTalk(), 2000);
     return () => clearTimeout(t);
   }, []);
 
@@ -240,10 +240,10 @@ export default function LandingPage() {
           )}
         </div>
 
-        {/* Chammach — one support element: the animated mascot + its speech bubble */}
+        {/* Buddy — one support element: the animated mascot + its speech bubble */}
         <div
           className="anim-g landing-float relative z-10 cursor-pointer select-none flex flex-col items-center"
-          onClick={chammachTalk}
+          onClick={buddyTalk}
         >
           {/* Speech bubble */}
           <div
@@ -255,7 +255,7 @@ export default function LandingPage() {
           </div>
 
           {/* Animated spoon */}
-          <ChammachSpoon wiggling={isWiggling} mouthOpen={mouthOpen} />
+          <BuddySpoon wiggling={isWiggling} mouthOpen={mouthOpen} />
         </div>
       </main>
 
@@ -289,7 +289,7 @@ export default function LandingPage() {
         <div className="max-w-xl mx-auto">
           <p className="text-3xl mb-3">🥄✨</p>
           <p className="text-white text-base sm:text-lg font-semibold leading-relaxed">
-            Chammach knows what you've cooked, what's available, what you need —
+            Buddy knows what you've cooked, what's available, what you need —
             and just tells you what to make tonight.
           </p>
         </div>
@@ -365,7 +365,7 @@ function FeatureCard({
   );
 }
 
-function ChammachSpoon({ wiggling, mouthOpen }: { wiggling: boolean; mouthOpen: boolean }) {
+function BuddySpoon({ wiggling, mouthOpen }: { wiggling: boolean; mouthOpen: boolean }) {
   return (
     <svg
       width="64"

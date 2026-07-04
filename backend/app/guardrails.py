@@ -4,7 +4,7 @@ Centralised safety and validation logic covering:
 
   14.1 Input guardrails   — non-food images, prompt injection, oversized files
   14.2 Output guardrails  — toxic substitutes, allergen blindness, expired-only recipes
-  14.3 Agentic guardrails — Chammach's 7 rules (enforced at loop level)
+  14.3 Agentic guardrails — Buddy's 7 rules (enforced at loop level)
   14.4 Demo day safety    — pre-flight checks for the 5 key failure scenarios
 """
 
@@ -248,10 +248,10 @@ def filter_expired_only_recipes(recipes: list[dict], pantry: list[dict]) -> list
 
 
 # ══════════════════════════════════════════════════════════════════════════════
-# 14.3  AGENTIC GUARDRAILS — Chammach's 7 rules
+# 14.3  AGENTIC GUARDRAILS — Buddy's 7 rules
 # ══════════════════════════════════════════════════════════════════════════════
 #
-# Rule 1 — Read-only:        Chammach only reads data and makes recommendations.
+# Rule 1 — Read-only:        Buddy only reads data and makes recommendations.
 #                             It never writes pantry items, places orders, or
 #                             modifies user data without an explicit user action.
 # Rule 2 — No irreversible:  No delete, no external API mutations, no orders.
@@ -259,7 +259,7 @@ def filter_expired_only_recipes(recipes: list[dict], pantry: list[dict]) -> list
 # Rule 4 — No external orders: Cannot call shopping/delivery APIs.
 # Rule 5 — Graceful degrade: On tool failure, continue with partial info.
 # Rule 6 — Audit log:        Every tool call is logged with trigger + input.
-# Rule 7 — Transparency:     notify_user() must explain what Chammach found.
+# Rule 7 — Transparency:     notify_user() must explain what Buddy found.
 #
 # Rules 1, 2, 4 are enforced structurally (the tools simply do not exist).
 # Rules 3, 5, 6, 7 are enforced here and in the agent loop.
@@ -295,7 +295,7 @@ def validate_agent_tool_call(tool_name: str, tool_input: dict) -> tuple[bool, st
     PRD §14.3
     """
     if tool_name in BLOCKED_AGENT_TOOLS:
-        return False, f"Tool '{tool_name}' is blocked — Chammach cannot perform write operations."
+        return False, f"Tool '{tool_name}' is blocked — Buddy cannot perform write operations."
 
     if tool_name not in ALLOWED_AGENT_TOOLS:
         return False, f"Tool '{tool_name}' is not in the allowed tool set."
@@ -316,12 +316,12 @@ def log_agent_tool_call(
     call_index: int,
 ) -> None:
     """
-    Audit log entry for every Chammach tool call.
+    Audit log entry for every Buddy tool call.
     Rule 6 — audit log.
     PRD §14.3
     """
     logger.info(
-        "[chammach-audit] trigger=%r call=%d tool=%s input=%r result=%s",
+        "[buddy-audit] trigger=%r call=%d tool=%s input=%r result=%s",
         trigger,
         call_index,
         tool_name,
@@ -330,9 +330,9 @@ def log_agent_tool_call(
     )
 
 
-def validate_chammach_dialogue(dialogue: str) -> str:
+def validate_buddy_dialogue(dialogue: str) -> str:
     """
-    Ensure Chammach's notify_user dialogue meets transparency requirements.
+    Ensure Buddy's notify_user dialogue meets transparency requirements.
     Rule 7 — transparency.
 
     - Must not be empty
@@ -347,7 +347,7 @@ def validate_chammach_dialogue(dialogue: str) -> str:
     dialogue = dialogue.strip()[:300]
     # If injection detected, replace entirely
     if check_prompt_injection(dialogue):
-        logger.warning("[guardrail-14.3] Injection in Chammach dialogue — replaced with safe fallback")
+        logger.warning("[guardrail-14.3] Injection in Buddy dialogue — replaced with safe fallback")
         return "Your pantry is all set! Let me know if you need anything."
     return dialogue
 
@@ -420,7 +420,7 @@ async def demo_preflight_check() -> dict:
 
     # ── S3: WebSocket manager has connections (optional — 0 is ok pre-demo) ──
     try:
-        from app.routers.chammach import manager
+        from app.routers.buddy import manager
         active = len(manager.active)
         results["websocket"] = {
             "status": "ok",

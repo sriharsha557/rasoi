@@ -132,7 +132,7 @@ export default function OnboardingPage() {
             Let's set up your kitchen profile
           </h1>
           <p className="text-sm text-white/80 mt-2">
-            A few quick details so Chammach can tailor meals, portions, and grocery budgets to you.
+            A few quick details so Buddy can tailor meals, portions, and grocery budgets to you.
           </p>
         </section>
 
