@@ -17,7 +17,7 @@ from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, BackgroundTasks
 from pydantic import BaseModel
 
-from app.database import get_cook_history_repository, DEMO_USER_ID
+from app.database import get_cook_history_repository, get_preferences_repository, DEMO_USER_ID
 from app.routers.pantry import get_session_pantry_items
 from app.services.recipe_service import get_recipes
 from app.clients import claude_client as _claude_client
@@ -256,10 +256,16 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> str:
         all_items = await _fetch_pantry()
         if not all_items:
             return json.dumps({"error": "Session pantry is empty — nothing scanned yet"})
+        prefs_repo = await get_preferences_repository()
+        prefs_row = await prefs_repo.get(DEMO_USER_ID)
+        health_conditions = json.loads((prefs_row or {}).get("health_conditions") or "[]")
+        health_goal = (prefs_row or {}).get("health_goal") or "maintenance"
         result = await get_recipes(
             pantry_items=all_items,
             prioritize_expiring=False,
             max_recipes=count,
+            health_conditions=health_conditions,
+            health_goal=health_goal,
         )
         recipes = result.get("recipes", [])
         return json.dumps({
@@ -270,6 +276,8 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> str:
                     "name": r["name"],
                     "prepTimeMinutes": r.get("prepTimeMinutes", 30),
                     "matchPercentage": r.get("matchPercentage", 0),
+                    "healthMatchPercentage": r.get("healthMatchPercentage", 100),
+                    "healthNote": r.get("healthNote"),
                     "missingIngredients": r.get("missingIngredients", [])[:3],
                 }
                 for r in recipes[:count]

@@ -155,6 +155,81 @@ def _uses_expiring(recipe: dict[str, Any], pantry_items: list[dict[str, Any]]) -
     )
 
 
+# Ingredients with a high glycemic impact — used only to softly re-rank
+# recipes for users who've flagged diabetes, never to label a recipe as
+# medically "safe" or "unsafe". Not a substitute for professional dietary advice.
+_HIGH_GI_INGREDIENT_TERMS = frozenset([
+    "sugar", "jaggery", "honey", "white rice", "maida", "refined flour",
+    "white bread", "cornflakes", "soda", "cola", "syrup",
+])
+
+
+def _health_match(recipe: dict[str, Any], health_conditions: list[str], health_goal: str) -> tuple[int, str | None]:
+    """
+    Heuristic 0-100 health-match score plus a soft, non-medical note, derived
+    from the recipe's existing nutrition fields and ingredient list. This is a
+    rough re-ranking signal for a demo, not medical guidance — deliberately
+    conservative (only diabetes + the fitness goals get scored; other
+    conditions are stored for future use but not scored without real signal).
+    """
+    calories = recipe.get("caloriesKcal")
+    protein = recipe.get("proteinG")
+    carbs = recipe.get("carbsG")
+    fiber = recipe.get("fiberG")
+
+    if calories is None and protein is None and carbs is None:
+        return 100, None  # no nutrition data available — don't penalize
+
+    score = 100
+    note: str | None = None
+
+    if "diabetes" in health_conditions:
+        ingredient_text = " ".join(
+            (ing.get("name") or "") for ing in (recipe.get("ingredients") or [])
+        ).lower()
+        if any(term in ingredient_text for term in _HIGH_GI_INGREDIENT_TERMS):
+            score -= 30
+        if carbs is not None and carbs > 60 and (fiber or 0) < 5:
+            score -= 15
+        if score < 100:
+            note = "Lower glycemic-impact pick for your profile"
+
+    if health_goal == "weight_loss":
+        if calories is not None and calories > 600:
+            score -= 20
+            note = note or "Lighter option for your weight-loss goal"
+        elif fiber is not None and fiber >= 8:
+            score = min(100, score + 5)
+    elif health_goal in ("muscle_gain", "general_fitness"):
+        if protein is not None and protein >= 25:
+            score = min(100, score + 10)
+            note = note or "High-protein pick for your fitness goal"
+        elif protein is not None and protein < 12:
+            score -= 15
+
+    # Nothing specific to flag, but a profile is active — give a generic
+    # affirming note so the UI can still show the recipe was considered.
+    if note is None and (health_conditions or health_goal != "maintenance"):
+        note = "Matches your health profile"
+
+    return max(0, min(100, score)), note
+
+
+def _apply_health_profile(
+    recipes: list[dict[str, Any]],
+    health_conditions: list[str] | None,
+    health_goal: str | None,
+) -> list[dict[str, Any]]:
+    """Attach healthMatchPercentage/healthNote to each recipe dict, in place."""
+    health_conditions = health_conditions or []
+    health_goal = health_goal or "maintenance"
+    for recipe in recipes:
+        score, note = _health_match(recipe, health_conditions, health_goal)
+        recipe["healthMatchPercentage"] = score
+        recipe["healthNote"] = note
+    return recipes
+
+
 def _to_api_recipe(recipe: RecipeModel, source: str = "supabase") -> dict[str, Any]:
     ingredients = [ingredient.model_dump() for ingredient in recipe.ingredients]
     cooking_steps = [step.model_dump() for step in recipe.cooking_steps]
@@ -242,6 +317,14 @@ def _normalise_ai_recipe(raw: dict[str, Any], pantry_names: set[str]) -> dict[st
         "imageUrl": None,
         "image": None,
         "description": None,
+        "caloriesKcal": raw.get("caloriesKcal"),
+        "calories_kcal": raw.get("caloriesKcal"),
+        "proteinG": raw.get("proteinG"),
+        "protein_g": raw.get("proteinG"),
+        "carbsG": raw.get("carbsG"),
+        "carbs_g": raw.get("carbsG"),
+        "fiberG": raw.get("fiberG"),
+        "fiber_g": raw.get("fiberG"),
         "ingredients": enriched,
         "recipeIngredients": enriched,
         "cooking_steps": cooking_steps,
@@ -253,7 +336,7 @@ def _normalise_ai_recipe(raw: dict[str, Any], pantry_names: set[str]) -> dict[st
         "missing_ingredients": missing,
         "usesExpiringItems": bool(raw.get("usesExpiringItems", False)),
         "uses_expiring_items": bool(raw.get("usesExpiringItems", False)),
-        "source": "openai",
+        "source": "claude",
     }
 
 
@@ -385,18 +468,23 @@ async def get_recipes(
     meal_type: str | None = None,
     diet: str | None = None,
     max_ready_time: int | None = None,
+    health_conditions: list[str] | None = None,
+    health_goal: str | None = None,
 ) -> dict:
     """
     Wrapper function for use in FastAPI routes.
-    
+
     Coordinates recipe generation across all services using the 3-tier failover.
-    
+
     Args:
         pantry_items: List of pantry items (already enriched with expiry flags)
         prioritize_expiring: Whether to prioritize recipes using expiring items
         max_recipes: Maximum number of recipes to return
         cuisine: Cuisine filter hint (best-effort)
-    
+        health_conditions: Onboarding health conditions (e.g. ["diabetes"]) — used
+            to softly re-rank recipes via healthMatchPercentage, not to filter them.
+        health_goal: Onboarding fitness goal (weight_loss/muscle_gain/general_fitness/maintenance)
+
     Returns:
         Dict with success, recipes, provider, message
     """
@@ -433,9 +521,11 @@ async def get_recipes(
                 prioritize_expiring=prioritize_expiring,
                 max_recipes=ai_count,
                 cuisine=cuisine_value,
+                health_conditions=health_conditions,
+                health_goal=health_goal,
             )
             recipes = [_normalise_ai_recipe(r, pantry_names_norm) for r in (ai_recipes or [])]
-            provider = "openai"
+            provider = "claude"
         except Exception as exc:
             logger.error("AI recipe generation failed: %s", exc)
             recipes = []
@@ -474,7 +564,8 @@ async def get_recipes(
     
     # Mark expiring and sort
     recipes = _mark_expiring(recipes, pantry_items)
-    
+    recipes = _apply_health_profile(recipes, health_conditions, health_goal)
+
     return {
         "success": True,
         "recipes": recipes[:max_recipes],

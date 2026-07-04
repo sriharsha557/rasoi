@@ -664,13 +664,13 @@ components:
         cooking_steps:
           type: array
           items: { $ref: '#/components/schemas/RecipeStep' }
-        source: { type: string, enum: [supabase, spoonacular, openai] }
+        source: { type: string, enum: [supabase, spoonacular, claude] }
 
     RecipesResponse:
       type: object
       properties:
         success: { type: boolean }
-        provider: { type: string, example: openai }
+        provider: { type: string, example: claude }
         message: { type: string }
         recipes:
           type: array

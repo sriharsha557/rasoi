@@ -59,11 +59,22 @@ class DatabaseConnection:
                     family_size INTEGER NOT NULL DEFAULT 1,
                     budget_amount REAL,
                     budget_period TEXT NOT NULL DEFAULT 'monthly',
+                    health_conditions TEXT NOT NULL DEFAULT '[]',  -- JSON array, e.g. ["diabetes"]
+                    health_goal TEXT NOT NULL DEFAULT 'maintenance',
                     onboarding_completed INTEGER NOT NULL DEFAULT 0,
                     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
                     updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+
+            # Migration for pre-existing local DBs created before health_conditions/health_goal existed.
+            existing_columns = {
+                row[1] async for row in await db.execute("PRAGMA table_info(user_preferences)")
+            }
+            if "health_conditions" not in existing_columns:
+                await db.execute("ALTER TABLE user_preferences ADD COLUMN health_conditions TEXT NOT NULL DEFAULT '[]'")
+            if "health_goal" not in existing_columns:
+                await db.execute("ALTER TABLE user_preferences ADD COLUMN health_goal TEXT NOT NULL DEFAULT 'maintenance'")
 
             await db.commit()
 
@@ -213,6 +224,8 @@ class PreferencesRepository:
             "family_size": data["family_size"],
             "budget_amount": data["budget_amount"],
             "budget_period": data["budget_period"],
+            "health_conditions": _json.dumps(data.get("health_conditions") or []),
+            "health_goal": data.get("health_goal") or "maintenance",
             "onboarding_completed": 1,
         }
 
@@ -223,13 +236,15 @@ class PreferencesRepository:
                     UPDATE user_preferences
                     SET cuisines = ?, diet_type = ?, height_cm = ?, weight_kg = ?,
                         family_size = ?, budget_amount = ?, budget_period = ?,
+                        health_conditions = ?, health_goal = ?,
                         onboarding_completed = ?, updated_at = ?
                     WHERE user_id = ?
                     """,
                     (
                         payload["cuisines"], payload["diet_type"], payload["height_cm"],
                         payload["weight_kg"], payload["family_size"], payload["budget_amount"],
-                        payload["budget_period"], payload["onboarding_completed"], now, user_id,
+                        payload["budget_period"], payload["health_conditions"], payload["health_goal"],
+                        payload["onboarding_completed"], now, user_id,
                     ),
                 )
             else:
@@ -237,13 +252,15 @@ class PreferencesRepository:
                     """
                     INSERT INTO user_preferences
                         (user_id, cuisines, diet_type, height_cm, weight_kg, family_size,
-                         budget_amount, budget_period, onboarding_completed, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                         budget_amount, budget_period, health_conditions, health_goal,
+                         onboarding_completed, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         user_id, payload["cuisines"], payload["diet_type"], payload["height_cm"],
                         payload["weight_kg"], payload["family_size"], payload["budget_amount"],
-                        payload["budget_period"], payload["onboarding_completed"], now, now,
+                        payload["budget_period"], payload["health_conditions"], payload["health_goal"],
+                        payload["onboarding_completed"], now, now,
                     ),
                 )
             await db.commit()

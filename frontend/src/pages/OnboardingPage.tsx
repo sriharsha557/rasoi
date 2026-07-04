@@ -1,7 +1,23 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../services/apiClient';
-import type { BmiCategory, BudgetPeriod, DietType } from '../types';
+import type { BmiCategory, BudgetPeriod, DietType, HealthCondition, HealthGoal } from '../types';
+
+const HEALTH_CONDITION_OPTIONS: { value: HealthCondition; label: string }[] = [
+  { value: 'diabetes', label: 'Diabetes' },
+  { value: 'hypertension', label: 'Hypertension' },
+  { value: 'thyroid', label: 'Thyroid' },
+  { value: 'pcos', label: 'PCOS' },
+  { value: 'kidney', label: 'Kidney condition' },
+  { value: 'allergies', label: 'Food allergies' },
+];
+
+const HEALTH_GOAL_OPTIONS: { value: HealthGoal; label: string; emoji: string }[] = [
+  { value: 'weight_loss', label: 'Weight loss', emoji: '⚖️' },
+  { value: 'muscle_gain', label: 'Muscle gain', emoji: '💪' },
+  { value: 'general_fitness', label: 'General fitness', emoji: '🏃' },
+  { value: 'maintenance', label: 'Maintenance', emoji: '🙂' },
+];
 
 const CUISINE_OPTIONS = [
   'Belgian',
@@ -50,6 +66,8 @@ export default function OnboardingPage() {
   const [familySize, setFamilySize] = useState(2);
   const [budgetAmount, setBudgetAmount] = useState('');
   const [budgetPeriod, setBudgetPeriod] = useState<BudgetPeriod>('monthly');
+  const [healthConditions, setHealthConditions] = useState<HealthCondition[]>([]);
+  const [healthGoal, setHealthGoal] = useState<HealthGoal>('maintenance');
 
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -68,6 +86,8 @@ export default function OnboardingPage() {
         setFamilySize(preferences.familySize || 2);
         setBudgetAmount(preferences.budgetAmount != null ? String(preferences.budgetAmount) : '');
         setBudgetPeriod(preferences.budgetPeriod);
+        setHealthConditions(preferences.healthConditions || []);
+        setHealthGoal(preferences.healthGoal || 'maintenance');
       })
       .catch(() => setError('Could not load saved preferences — starting fresh.'))
       .finally(() => setIsLoading(false));
@@ -78,6 +98,12 @@ export default function OnboardingPage() {
   const toggleCuisine = (cuisine: string) => {
     setCuisines((prev) =>
       prev.includes(cuisine) ? prev.filter((c) => c !== cuisine) : [...prev, cuisine]
+    );
+  };
+
+  const toggleHealthCondition = (condition: HealthCondition) => {
+    setHealthConditions((prev) =>
+      prev.includes(condition) ? prev.filter((c) => c !== condition) : [...prev, condition]
     );
   };
 
@@ -105,6 +131,8 @@ export default function OnboardingPage() {
         familySize,
         budgetAmount: Number(budgetAmount),
         budgetPeriod,
+        healthConditions,
+        healthGoal,
       });
       navigate('/scan');
     } catch {
@@ -289,6 +317,58 @@ export default function OnboardingPage() {
               </div>
             </div>
           </div>
+        </section>
+
+        {/* Health profile */}
+        <section className="bg-white border border-gray-100 rounded-card shadow-card p-5">
+          <h2 className="text-sm font-bold text-gray-900 mb-1">Health profile (optional)</h2>
+          <p className="text-xs text-gray-500 mb-3">
+            Helps Buddy softly favor better-matched recipes — not medical advice.
+          </p>
+
+          <p className="text-xs font-semibold text-gray-700 mb-2">Existing conditions</p>
+          <div className="flex flex-wrap gap-2 mb-4">
+            {HEALTH_CONDITION_OPTIONS.map((option) => {
+              const active = healthConditions.includes(option.value);
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => toggleHealthCondition(option.value)}
+                  className={`px-3.5 py-1.5 rounded-pill text-sm font-medium border transition-colors ${
+                    active
+                      ? 'bg-rasoi text-white border-rasoi'
+                      : 'bg-white text-gray-600 border-gray-200 hover:border-rasoi/50'
+                  }`}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <p className="text-xs font-semibold text-gray-700 mb-2">Goal</p>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+            {HEALTH_GOAL_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setHealthGoal(option.value)}
+                className={`flex flex-col items-center gap-1 px-3 py-3 rounded-card text-xs font-semibold border transition-colors ${
+                  healthGoal === option.value
+                    ? 'bg-rasoi-light text-rasoi-dark border-rasoi'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-rasoi/50'
+                }`}
+              >
+                <span className="text-lg">{option.emoji}</span>
+                {option.label}
+              </button>
+            ))}
+          </div>
+
+          <p className="text-[11px] text-gray-400 leading-snug">
+            Not a substitute for professional dietary or medical advice.
+          </p>
         </section>
 
         {/* Save */}

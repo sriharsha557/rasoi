@@ -125,11 +125,21 @@ async def extract_receipt_items(
     return items, raw_text
 
 
+_HEALTH_GOAL_PROMPTS = {
+    "weight_loss": "prioritize higher-fiber, higher-protein, lower calorie-density recipes",
+    "muscle_gain": "prioritize higher-protein recipes",
+    "general_fitness": "prioritize higher-protein, balanced recipes",
+    "maintenance": "",
+}
+
+
 async def get_recipe_recommendations(
     pantry_items: list[dict],
     prioritize_expiring: bool = True,
     max_recipes: int = 5,
     cuisine: str = "any",
+    health_conditions: list[str] | None = None,
+    health_goal: str | None = None,
 ) -> list[dict]:
     """
     Ask Claude to generate meal recommendations from pantry contents.
@@ -163,9 +173,25 @@ async def get_recipe_recommendations(
         else ""
     )
 
+    health_conditions = health_conditions or []
+    goal_instruction = _HEALTH_GOAL_PROMPTS.get(health_goal or "maintenance", "")
+    health_notes = []
+    if "diabetes" in health_conditions:
+        health_notes.append(
+            "the user has diabetes — deprioritize high-glycemic ingredients "
+            "(sugar, white rice, refined flour, honey) where a reasonable swap exists"
+        )
+    if goal_instruction:
+        health_notes.append(f"the user's goal is {health_goal.replace('_', ' ')} — {goal_instruction}")
+    health_note = (
+        "HEALTH PROFILE (soft preference, not a medical constraint): " + "; ".join(health_notes) + "."
+        if health_notes else ""
+    )
+
     prompt = f"""You are Food Buddy, a kitchen AI. Given this pantry, suggest {max_recipes} meal recipes.
 {priority_note}
 {cuisine_note}
+{health_note}
 
 Pantry:
 {pantry_text}
@@ -186,12 +212,17 @@ Return ONLY a JSON array (no markdown, no explanation). Each recipe:
   "steps": [
     "Heat oil in a pan.",
     "Add onions and sauté for 3 minutes."
-  ]
+  ],
+  "caloriesKcal": 450,
+  "proteinG": 20,
+  "carbsG": 40,
+  "fiberG": 6
 }}
 
 Rules:
 - matchPercentage: % of recipe ingredients available in pantry (0-100)
 - usesExpiringItems: true if at least one expiring item is used
+- caloriesKcal/proteinG/carbsG/fiberG: your best per-serving nutrition estimate (numbers)
 - steps: 4-7 clear cooking steps
 - DIVERSITY: make the {max_recipes} recipes genuinely different from each other —
   vary the cuisine, meal type, and cooking method, and collectively use a wide

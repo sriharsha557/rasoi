@@ -279,6 +279,14 @@ export default function RecipePage() {
                 <span className={`text-xs font-extrabold px-2.5 py-1 rounded-full bg-rasoi-panel ${matchColor}`}>
                   {currentRecipe.matchPercentage}% match
                 </span>
+                {currentRecipe.healthNote && (
+                  <span
+                    className="text-xs font-extrabold px-2.5 py-1 rounded-full bg-green-50 text-green-700"
+                    title={currentRecipe.healthNote}
+                  >
+                    💚 {currentRecipe.healthMatchPercentage}% health match
+                  </span>
+                )}
               </div>
             </div>
             {currentRecipe.usesExpiringItems && (

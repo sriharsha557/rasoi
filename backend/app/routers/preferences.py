@@ -2,8 +2,10 @@
 Preferences router — GET/PUT /api/preferences
 
 Onboarding data for Food Buddy's single demo user (Captain Cook): cuisine picks,
-diet type, height/weight (BMI computed server-side), family size, and a
-weekly or monthly pantry budget.
+diet type, height/weight (BMI computed server-side), family size, a weekly or
+monthly pantry budget, and an optional health profile (existing conditions +
+a fitness goal) used to bias recipe suggestions — see recipe_service.py's
+health-match scoring. Not a substitute for professional dietary advice.
 
 Endpoints:
   GET /api/preferences — current preferences (onboardingCompleted: false if never saved)
@@ -22,6 +24,8 @@ router = APIRouter(prefix="/api/preferences", tags=["preferences"])
 
 DietType = Literal["vegetarian", "non_vegetarian", "eggetarian", "vegan"]
 BudgetPeriod = Literal["weekly", "monthly"]
+HealthCondition = Literal["diabetes", "hypertension", "thyroid", "pcos", "kidney", "allergies"]
+HealthGoal = Literal["weight_loss", "muscle_gain", "general_fitness", "maintenance"]
 
 
 class PreferencesUpdateRequest(BaseModel):
@@ -32,6 +36,8 @@ class PreferencesUpdateRequest(BaseModel):
     familySize: int = Field(ge=1, le=20)
     budgetAmount: float = Field(ge=0)
     budgetPeriod: BudgetPeriod = "monthly"
+    healthConditions: List[HealthCondition] = Field(default_factory=list)
+    healthGoal: HealthGoal = "maintenance"
 
 
 def _bmi_category(bmi: float) -> str:
@@ -56,6 +62,8 @@ def _to_response(row: Optional[dict]) -> dict:
             "familySize": 1,
             "budgetAmount": None,
             "budgetPeriod": "monthly",
+            "healthConditions": [],
+            "healthGoal": "maintenance",
             "onboardingCompleted": False,
         }
 
@@ -71,6 +79,11 @@ def _to_response(row: Optional[dict]) -> dict:
     except (json.JSONDecodeError, TypeError):
         cuisines = []
 
+    try:
+        health_conditions = json.loads(row.get("health_conditions") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        health_conditions = []
+
     return {
         "cuisines": cuisines,
         "dietType": row.get("diet_type"),
@@ -81,6 +94,8 @@ def _to_response(row: Optional[dict]) -> dict:
         "familySize": row.get("family_size"),
         "budgetAmount": row.get("budget_amount"),
         "budgetPeriod": row.get("budget_period"),
+        "healthConditions": health_conditions,
+        "healthGoal": row.get("health_goal") or "maintenance",
         "onboardingCompleted": bool(row.get("onboarding_completed")),
     }
 
@@ -106,6 +121,8 @@ async def save_preferences(
         "family_size": body.familySize,
         "budget_amount": body.budgetAmount,
         "budget_period": body.budgetPeriod,
+        "health_conditions": body.healthConditions,
+        "health_goal": body.healthGoal,
     })
     return {"success": True, "preferences": _to_response(row)}
 

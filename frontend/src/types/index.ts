@@ -105,6 +105,9 @@ export interface Recipe {
   usesExpiringItems: boolean;
   missingIngredients: string[];
   source?: 'supabase' | 'spoonacular' | string;
+  /** Heuristic 0-100 re-ranking signal from the user's health profile — not medical guidance. */
+  healthMatchPercentage?: number;
+  healthNote?: string | null;
 }
 
 export interface RecipeSearchFilters {
@@ -316,6 +319,8 @@ export interface DeliveryPartnersResponse {
 export type DietType = 'vegetarian' | 'non_vegetarian' | 'eggetarian' | 'vegan';
 export type BudgetPeriod = 'weekly' | 'monthly';
 export type BmiCategory = 'underweight' | 'normal' | 'overweight' | 'obese';
+export type HealthCondition = 'diabetes' | 'hypertension' | 'thyroid' | 'pcos' | 'kidney' | 'allergies';
+export type HealthGoal = 'weight_loss' | 'muscle_gain' | 'general_fitness' | 'maintenance';
 
 export interface UserPreferences {
   cuisines: string[];
@@ -327,6 +332,8 @@ export interface UserPreferences {
   familySize: number;
   budgetAmount: number | null;
   budgetPeriod: BudgetPeriod;
+  healthConditions: HealthCondition[];
+  healthGoal: HealthGoal;
   onboardingCompleted: boolean;
 }
 
@@ -342,6 +349,8 @@ export interface PreferencesUpdateRequest {
   familySize: number;
   budgetAmount: number;
   budgetPeriod: BudgetPeriod;
+  healthConditions: HealthCondition[];
+  healthGoal: HealthGoal;
 }
 
 export interface PreferencesSaveResponse {

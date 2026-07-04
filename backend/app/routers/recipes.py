@@ -21,7 +21,21 @@ from app.services.recipe_service import (
 )
 from app.services.planner_service import get_planner_recipe_by_name
 from app.routers.pantry import get_session_pantry_items, remove_session_items
-from app.database import DEMO_USER_ID, get_cook_history_repository
+from app.database import DEMO_USER_ID, get_cook_history_repository, get_preferences_repository
+
+
+async def _health_profile() -> tuple[list[str], str]:
+    """Read the demo user's onboarding health conditions/goal (defaults if unset)."""
+    repo = await get_preferences_repository()
+    row = await repo.get(DEMO_USER_ID)
+    if not row:
+        return [], "maintenance"
+    import json
+    try:
+        conditions = json.loads(row.get("health_conditions") or "[]")
+    except (json.JSONDecodeError, TypeError):
+        conditions = []
+    return conditions, row.get("health_goal") or "maintenance"
 
 router = APIRouter(prefix="/api", tags=["recipes"])
 
@@ -62,9 +76,10 @@ async def recipes(
         )
 
     pantry = await get_session_pantry_items(DEMO_USER_ID)
+    health_conditions, health_goal = await _health_profile()
 
-    # Get recipe recommendations from Supabase for Indian/local recipes and
-    # Spoonacular for continental cuisines.
+    # Get recipe recommendations from the local Supabase catalogue, falling
+    # back to Spoonacular for cuisines not owned locally.
     result = await get_recipes(
         pantry,
         prioritize_expiring,
@@ -73,6 +88,8 @@ async def recipes(
         meal_type,
         diet,
         max_ready_time,
+        health_conditions,
+        health_goal,
     )
     
     # Build response matching spec format
@@ -105,7 +122,11 @@ async def recommend(
     Alias of /api/recipes with expiry-first ordering and cuisine hint.
     """
     pantry = await get_session_pantry_items(DEMO_USER_ID)
-    result = await get_recipes(pantry, prioritize_expiry, count, cuisine, meal_type, diet, max_ready_time)
+    health_conditions, health_goal = await _health_profile()
+    result = await get_recipes(
+        pantry, prioritize_expiry, count, cuisine, meal_type, diet, max_ready_time,
+        health_conditions, health_goal,
+    )
     return result
 
 
