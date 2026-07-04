@@ -8,8 +8,10 @@
  */
 
 /**
- * Pantry Item interface representing an ingredient in the user's inventory.
- * 
+ * Pantry Item interface representing an ingredient in the session pantry
+ * (the user's most recent scan — RasOI does not persist a live, continuously
+ * -tracked inventory, so there's no expiry status or created/updated timestamps).
+ *
  * Validates: Requirement 2.1 - Pantry inventory data structure
  */
 export interface PantryItem {
@@ -18,11 +20,8 @@ export interface PantryItem {
   quantity: number;
   unit: string;
   acquisitionDate: string; // ISO 8601 format
-  expirationDate: string;  // ISO 8601 format
-  isExpiring: boolean;
-  isExpired: boolean;
-  createdAt: string;       // ISO 8601 format
-  updatedAt: string;       // ISO 8601 format
+  expirationDate: string;  // ISO 8601 format, estimated at scan time
+  confidence?: number;     // 0-1 from the vision model
 }
 
 /**
@@ -153,6 +152,9 @@ export interface ScanResponse {
 
 export interface PantryResponse {
   items: PantryItem[];
+  hasLastScan: boolean;
+  scanDate: string | null;
+  scanType: string | null;
 }
 
 export interface PantryItemResponse {
@@ -303,4 +305,141 @@ export interface CuisineProfilesResponse {
 
 export interface DeliveryPartnersResponse {
   partners: DeliveryPartner[];
+}
+
+/**
+ * Onboarding preferences for the (single, demo) RasOI user.
+ */
+export type DietType = 'vegetarian' | 'non_vegetarian' | 'eggetarian' | 'vegan';
+export type BudgetPeriod = 'weekly' | 'monthly';
+export type BmiCategory = 'underweight' | 'normal' | 'overweight' | 'obese';
+
+export interface UserPreferences {
+  cuisines: string[];
+  dietType: DietType;
+  heightCm: number | null;
+  weightKg: number | null;
+  bmi: number | null;
+  bmiCategory: BmiCategory | null;
+  familySize: number;
+  budgetAmount: number | null;
+  budgetPeriod: BudgetPeriod;
+  onboardingCompleted: boolean;
+}
+
+export interface PreferencesResponse {
+  preferences: UserPreferences;
+}
+
+export interface PreferencesUpdateRequest {
+  cuisines: string[];
+  dietType: DietType;
+  heightCm: number;
+  weightKg: number;
+  familySize: number;
+  budgetAmount: number;
+  budgetPeriod: BudgetPeriod;
+}
+
+export interface PreferencesSaveResponse {
+  success: boolean;
+  preferences: UserPreferences;
+}
+
+/**
+ * Grocery receipt scanning — line items extracted by the vision model
+ * and persisted to Supabase (receipt_scans / receipt_items).
+ */
+export type ReceiptItemCategory =
+  | 'Dairy'
+  | 'Vegetable'
+  | 'Spice'
+  | 'Grains'
+  | 'Oils'
+  | 'Lentils'
+  | 'Other';
+
+export interface ReceiptItem {
+  id?: string;
+  receipt_id?: string;
+  user_id?: string;
+  raw_name: string;
+  normalized_name: string;
+  brand: string | null;
+  quantity: number;
+  unit: string;
+  unit_price: number;
+  total_price: number;
+  category: ReceiptItemCategory;
+}
+
+export interface ReceiptScanResponse {
+  success: boolean;
+  receiptId?: string;
+  storeName?: string;
+  scanDate?: string;
+  totalAmount?: number;
+  items: ReceiptItem[];
+  message?: string;
+}
+
+/**
+ * Missing-ingredient product suggestion — from the Supabase
+ * suggest_product_for_missing(user_id, ingredient_name) RPC.
+ */
+export interface ProductSuggestion {
+  action: string;
+  product_name: string;
+  brand: string;
+  variant: string | null;
+  price_inr: number;
+  quality_tier: string;
+  reason: string;
+  upgrade_type: string | null;
+  blinkit_url: string | null;
+  zepto_url: string | null;
+  confidence: number;
+}
+
+export interface SuggestResponse {
+  ingredient: string;
+  suggestion: ProductSuggestion;
+}
+
+/**
+ * Purchase history — powers the /history page (receipt timeline, brand
+ * loyalty per category, and a buying-patterns summary card).
+ */
+export interface ReceiptScanRecord {
+  id: string;
+  storeName: string;
+  scanDate: string | null;
+  totalAmount: number | null;
+  items: ReceiptItem[];
+}
+
+export interface ReceiptHistoryResponse {
+  receipts: ReceiptScanRecord[];
+}
+
+export type BrandConsistency = 'green' | 'amber' | 'grey';
+
+export interface BrandPreferenceCategory {
+  category: string;
+  preferredBrand: string;
+  avgPrice: number | null;
+  timesPurchased: number;
+  distinctBrands: number;
+  consistency: BrandConsistency;
+}
+
+export interface BrandPreferencesResponse {
+  categories: BrandPreferenceCategory[];
+}
+
+export interface BuyingPatternsSummary {
+  totalSpent: number;
+  mostPurchasedItem: string | null;
+  favouriteStore: string | null;
+  potentialSavings: number | null;
 }

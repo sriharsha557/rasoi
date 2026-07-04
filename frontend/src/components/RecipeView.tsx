@@ -11,8 +11,16 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useRecipe } from '../context/RecipeContext';
+import { useGuest } from '../context/GuestContext';
 import apiClient, { ApiError } from '../services/apiClient';
-import type { Substitution } from '../types';
+import MissingIngredientCard from './MissingIngredientCard';
+import type { Substitution, ProductSuggestion } from '../types';
+
+interface MissingIngredientState {
+  suggestion: ProductSuggestion | null;
+  isLoading: boolean;
+  error: string | null;
+}
 
 /**
  * RecipeView Component
@@ -25,13 +33,66 @@ export default function RecipeView() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { state, dispatch } = useRecipe();
+  const { demoUser } = useGuest();
   const [showSubstitutions, setShowSubstitutions] = useState(false);
   const [selectedIngredient, setSelectedIngredient] = useState<string | null>(null);
   const [substitutions, setSubstitutions] = useState<Substitution[]>([]);
   const [loadingSubstitutions, setLoadingSubstitutions] = useState(false);
   const [substitutionError, setSubstitutionError] = useState<string | null>(null);
+  const [missingSuggestions, setMissingSuggestions] = useState<Record<string, MissingIngredientState>>({});
 
   const { currentRecipe, currentStep } = state;
+  const missingIngredients = currentRecipe?.missingIngredients ?? [];
+  const suggestUserId = demoUser?.id ?? 'guest';
+
+  /**
+   * Fetch a product suggestion for every missing ingredient once, shared
+   * between each MissingIngredientCard and the "estimated cost" banner.
+   */
+  useEffect(() => {
+    if (missingIngredients.length === 0) {
+      setMissingSuggestions({});
+      return;
+    }
+
+    setMissingSuggestions(
+      Object.fromEntries(
+        missingIngredients.map((name) => [name, { suggestion: null, isLoading: true, error: null }])
+      )
+    );
+
+    missingIngredients.forEach((name) => {
+      apiClient
+        .getSuggestion(name, suggestUserId)
+        .then((data) => {
+          setMissingSuggestions((prev) => ({
+            ...prev,
+            [name]: { suggestion: data.suggestion, isLoading: false, error: null },
+          }));
+        })
+        .catch((err) => {
+          setMissingSuggestions((prev) => ({
+            ...prev,
+            [name]: {
+              suggestion: null,
+              isLoading: false,
+              error: err instanceof ApiError ? err.message : 'Could not load a suggestion.',
+            },
+          }));
+        });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentRecipe?.id, missingIngredients.join('|'), suggestUserId]);
+
+  const missingEntries = missingIngredients.map((name) => missingSuggestions[name]);
+  const allSuggestionsResolved = missingEntries.every((entry) => entry && !entry.isLoading);
+  const estimatedCost = missingEntries.reduce((sum, entry) => sum + (entry?.suggestion?.price_inr ?? 0), 0);
+
+  const handleBuyAllMissing = () => {
+    if (missingIngredients.length === 0) return;
+    const query = missingIngredients.map((name) => encodeURIComponent(name)).join('+');
+    window.open(`https://blinkit.com/s/?q=${query}`, '_blank', 'noopener,noreferrer');
+  };
 
   /**
    * Load recipe if not in state (e.g., direct navigation)
@@ -336,6 +397,43 @@ export default function RecipeView() {
           </div>
         </div>
       </div>
+
+      {/* Missing Ingredients — product suggestions & bulk buy */}
+      {missingIngredients.length > 0 && (
+        <div className="mt-8">
+          <div className="bg-rasoi-amber-light border border-rasoi-amber/30 rounded-card px-5 py-4 mb-5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <p className="text-sm font-semibold text-rasoi-amber">
+              {missingIngredients.length} ingredient{missingIngredients.length !== 1 ? 's' : ''} missing
+              {' · '}Estimated cost:{' '}
+              {allSuggestionsResolved ? `₹${estimatedCost.toFixed(0)}` : 'calculating…'}
+              {' · '}Order in 10 min
+            </p>
+            <button
+              type="button"
+              onClick={handleBuyAllMissing}
+              className="shrink-0 px-5 py-2.5 bg-rasoi hover:bg-rasoi-dark text-white text-sm font-semibold rounded-pill transition-colors"
+            >
+              Buy All Missing
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {missingIngredients.map((name) => {
+              const entry = missingSuggestions[name];
+              return (
+                <MissingIngredientCard
+                  key={name}
+                  ingredientName={name}
+                  userId={suggestUserId}
+                  suggestion={entry?.suggestion ?? null}
+                  isLoading={entry?.isLoading ?? true}
+                  error={entry?.error ?? null}
+                />
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Substitution Modal */}
       {showSubstitutions && (

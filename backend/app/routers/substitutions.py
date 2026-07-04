@@ -2,11 +2,11 @@
 Substitution router — POST /api/substitute
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from app.clients import claude_client
-from app.routers.pantry import _attach_expiry_flags
-from app.database import get_repository, PantryRepository
+from app.routers.pantry import get_session_pantry_items
+from app.database import DEMO_USER_ID
 from app import guardrails
 
 router = APIRouter(prefix="/api/substitute", tags=["substitutions"])
@@ -19,10 +19,7 @@ class SubstitutionRequest(BaseModel):
 
 
 @router.post("")
-async def substitute(
-    body: SubstitutionRequest,
-    repo: PantryRepository = Depends(get_repository),
-):
+async def substitute(body: SubstitutionRequest):
     """
     Suggest pantry-available substitutes for a missing ingredient.
     """
@@ -36,8 +33,7 @@ async def substitute(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
-    raw_items = await repo.get_all()
-    pantry = [_attach_expiry_flags(i) for i in raw_items]
+    pantry = await get_session_pantry_items(DEMO_USER_ID)
 
     try:
         subs = await claude_client.get_substitutions(

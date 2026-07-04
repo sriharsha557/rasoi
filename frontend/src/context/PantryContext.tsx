@@ -18,6 +18,9 @@ interface PantryState {
   pantryItems: PantryItem[];
   isLoading: boolean;
   error: string | null;
+  hasLastScan: boolean;
+  scanDate: string | null;
+  scanType: string | null;
 }
 
 /**
@@ -29,7 +32,8 @@ type PantryAction =
   | { type: 'DELETE_ITEM'; payload: string }
   | { type: 'SET_LOADING'; payload: boolean }
   | { type: 'SET_ERROR'; payload: string | null }
-  | { type: 'SET_ITEMS'; payload: PantryItem[] };
+  | { type: 'SET_ITEMS'; payload: PantryItem[] }
+  | { type: 'SET_SESSION'; payload: { hasLastScan: boolean; scanDate: string | null; scanType: string | null } };
 
 /**
  * Context type combining state and dispatch
@@ -46,6 +50,9 @@ const initialState: PantryState = {
   pantryItems: [],
   isLoading: false,
   error: null,
+  hasLastScan: false,
+  scanDate: null,
+  scanType: null,
 };
 
 /**
@@ -98,6 +105,12 @@ function pantryReducer(state: PantryState, action: PantryAction): PantryState {
         ...state,
         pantryItems: action.payload,
         error: null,
+      };
+
+    case 'SET_SESSION':
+      return {
+        ...state,
+        ...action.payload,
       };
 
     default:

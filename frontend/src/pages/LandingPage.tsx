@@ -2,24 +2,46 @@ import { useState, useEffect, useRef } from 'react';
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGuest } from '../context/GuestContext';
+import { usePantry } from '../context/PantryContext';
+import apiClient from '../services/apiClient';
+import type { PantryResponse } from '../types';
 
 const DIALOGUES = [
   'Namaste! Show me your fridge!',
-  'Your paneer expires tomorrow!',
+  "What's for dinner? Let me decide!",
   'I found 3 meals you can cook!',
   'No cream? Use milk + butter!',
   'Well cooked! Pantry updated!',
 ];
 
+const STEPS = [
+  { emoji: '📝', label: 'Onboard', detail: 'Tell us your tastes, once' },
+  { emoji: '📸', label: 'Scan', detail: 'Photo of your fridge or shelf' },
+  { emoji: '🔍', label: 'Detect', detail: 'AI reads every ingredient' },
+  { emoji: '🧠', label: 'Decide', detail: "Chammach picks tonight's meal" },
+  { emoji: '👨‍🍳', label: 'Cook', detail: 'Step-by-step, no guesswork' },
+  { emoji: '🛒', label: 'Shop', detail: 'Missing items, one tap away' },
+];
+
+function daysAgo(isoDate: string): string {
+  const then = new Date(isoDate).getTime();
+  const days = Math.floor((Date.now() - then) / 86_400_000);
+  if (days <= 0) return 'today';
+  if (days === 1) return 'yesterday';
+  return `${days} days ago`;
+}
+
 export default function LandingPage() {
   const navigate = useNavigate();
   const { isGuest, demoUser, enterGuestMode } = useGuest();
+  const { dispatch } = usePantry();
 
+  const [sessionPrompt, setSessionPrompt] = useState<PantryResponse | null>(null);
   const [dialogue, setDialogue] = useState(DIALOGUES[0]);
   const [speechVisible, setSpeechVisible] = useState(false);
   const [isWiggling, setIsWiggling] = useState(false);
   const [mouthOpen, setMouthOpen] = useState(true);
-  const [visibleCards, setVisibleCards] = useState<boolean[]>([false, false, false]);
+  const [visibleCards, setVisibleCards] = useState<boolean[]>(Array(STEPS.length).fill(false));
   const cardRefs = useRef<(HTMLDivElement | null)[]>([]);
   const dIdxRef = useRef(0);
 
@@ -67,15 +89,52 @@ export default function LandingPage() {
     return () => clearTimeout(t);
   }, []);
 
-  const triggerScan = (type: string) => {
-    setDialogue('Show me what you have!');
-    setSpeechVisible(true);
-    setIsWiggling(true);
-    setTimeout(() => { setIsWiggling(false); setSpeechVisible(false); }, 2400);
-    navigate('/scan?type=' + type);
+  const handleGuest = async () => {
+    enterGuestMode();
+    try {
+      const { preferences } = await apiClient.getPreferences();
+      if (!preferences.onboardingCompleted) {
+        navigate('/onboarding');
+        return;
+      }
+    } catch {
+      navigate('/onboarding');
+      return;
+    }
+
+    // Session-based pantry: greet with "resume last scan" vs "start fresh"
+    // instead of assuming a live inventory is still accurate.
+    try {
+      const pantry = await apiClient.getPantry();
+      if (pantry.hasLastScan && pantry.items.length > 0) {
+        setSessionPrompt(pantry);
+        return;
+      }
+    } catch {
+      // No session data reachable — fall through to a fresh scan
+    }
+    navigate('/scan');
   };
 
-  const handleGuest = () => { enterGuestMode(); navigate('/scan'); };
+  const handleResumeSession = () => {
+    if (!sessionPrompt) return;
+    dispatch({ type: 'SET_ITEMS', payload: sessionPrompt.items });
+    dispatch({
+      type: 'SET_SESSION',
+      payload: {
+        hasLastScan: sessionPrompt.hasLastScan,
+        scanDate: sessionPrompt.scanDate,
+        scanType: sessionPrompt.scanType,
+      },
+    });
+    setSessionPrompt(null);
+    navigate('/pantry');
+  };
+
+  const handleStartFresh = () => {
+    setSessionPrompt(null);
+    navigate('/scan');
+  };
 
   return (
     <div className="flex flex-col min-h-screen bg-white font-sans">
@@ -139,55 +198,41 @@ export default function LandingPage() {
           </h1>
         </div>
 
-        {/* Tagline */}
-        <p className="anim-c relative z-10 text-xl sm:text-2xl font-semibold text-gray-800 mb-2">
-          Your kitchen's organic intelligence layer.
+        {/* Hook */}
+        <p className="anim-c relative z-10 text-2xl sm:text-3xl font-bold text-gray-900 mb-2 max-w-md">
+          "What should I cook today?"
         </p>
-        <p className="anim-d relative z-10 text-sm text-gray-500 max-w-sm leading-relaxed mb-7">
-          Scan your fridge, discover zero-waste meals, and let AI handle the rest — one scan to cook.
+        <p className="anim-c relative z-10 text-xs font-semibold text-rasoi uppercase tracking-widest mb-4">
+          The daily decision fatigue is real
+        </p>
+        {/* Problem → Solution */}
+        <p className="anim-d relative z-10 text-sm text-gray-500 max-w-sm leading-relaxed mb-1">
+          You have food. You have no plan. You waste both.
+        </p>
+        <p className="anim-d relative z-10 text-base text-gray-800 font-semibold max-w-sm leading-relaxed mb-7">
+          Show us your pantry. We decide for you.
         </p>
 
-        {/* CTA row */}
-        <div className="anim-e relative z-10 flex flex-col sm:flex-row gap-2.5 justify-center mb-4">
-          <button
-            onClick={() => triggerScan('ingredient')}
-            className="flex items-center gap-2 px-6 py-3 bg-rasoi hover:bg-rasoi-dark text-white font-semibold text-sm rounded-pill shadow-md transition-all hover:scale-[1.03] active:scale-[.97]"
-          >
-            <CameraIcon /> Scan my fridge
-          </button>
-          <button
-            onClick={() => triggerScan('receipt')}
-            className="flex items-center gap-2 px-6 py-3 border border-gray-200 hover:bg-gray-50 text-gray-800 font-semibold text-sm rounded-pill transition-all hover:scale-[1.03]"
-          >
-            <ReceiptIcon /> Scan receipt
-          </button>
-        </div>
-
-        {/* Guest / OR */}
-        <div className="anim-f relative z-10">
-          <div className="flex items-center gap-3 justify-center mb-3">
-            <span className="h-px w-12 bg-gray-200" />
-            <span className="text-xs text-gray-400">or</span>
-            <span className="h-px w-12 bg-gray-200" />
-          </div>
+        {/* CTA */}
+        <div className="anim-e relative z-10 flex flex-col items-center gap-2 mb-4">
           {!isGuest ? (
             <>
               <button
                 onClick={handleGuest}
-                className="inline-flex items-center gap-2 px-5 py-2 border border-gray-200 hover:bg-gray-50 text-gray-600 text-sm font-medium rounded-pill transition-colors"
+                className="flex items-center gap-2 px-7 py-3.5 bg-rasoi hover:bg-rasoi-dark text-white font-bold text-base rounded-pill shadow-md transition-all hover:scale-[1.03] active:scale-[.97]"
               >
-                🥄 Welcome Rasoi Raja (guest user)
+                <CameraIcon /> Get Started — Show me your pantry
               </button>
-              <p className="text-[11px] text-gray-400 mt-1.5">
-                Demo profile — Indian cuisine, 2 servings.
+              <p className="text-[11px] text-gray-400 mt-0.5">
+                Quick one-time setup: tastes, diet, budget — then just scan and cook.
               </p>
             </>
           ) : (
             <button
-              onClick={() => navigate('/scan')}
-              className="inline-flex items-center gap-1.5 px-5 py-2 bg-rasoi-light text-rasoi-dark text-sm font-semibold rounded-pill"
+              onClick={handleGuest}
+              className="inline-flex items-center gap-1.5 px-6 py-3 bg-rasoi-light text-rasoi-dark font-bold text-sm rounded-pill"
             >
-              ✅ {demoUser?.displayName ?? 'Rasoi Raja'}: Go to scan →
+              ✅ {demoUser?.displayName ?? 'Rasoi Raja'}: Continue →
             </button>
           )}
         </div>
@@ -221,56 +266,78 @@ export default function LandingPage() {
 
       {/* ── How it works ── */}
       <section className="bg-rasoi-panel border-t border-gray-100 py-12 px-6">
-        <p className="text-center text-xl font-semibold text-gray-800 mb-8">How RasOI works</p>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 max-w-2xl mx-auto">
-
-          {/* Card 1 — scan bar */}
-          <FeatureCard visible={visibleCards[0]} cardRef={(el) => { cardRefs.current[0] = el; }}>
-            <div className="w-11 h-11 rounded-xl bg-rasoi-light flex items-center justify-center mx-auto mb-3">
-              <div className="relative w-8 h-8 rounded-lg bg-white overflow-hidden">
-                <div className="landing-scan-line" />
-              </div>
-            </div>
-            <p className="font-semibold text-sm text-gray-900 mb-1">Scan & detect</p>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Upload a fridge photo or grocery receipt. Our <span className="text-rasoi font-medium">AI</span> extracts every ingredient instantly.
-            </p>
-          </FeatureCard>
-
-          {/* Card 2 — expiry dots */}
-          <FeatureCard visible={visibleCards[1]} cardRef={(el) => { cardRefs.current[1] = el; }}>
-            <div className="w-11 h-11 rounded-xl bg-rasoi-light flex items-center justify-center mx-auto mb-3">
-              <GridIcon />
-            </div>
-            <p className="font-semibold text-sm text-gray-900 mb-1">Live pantry</p>
-            <p className="text-xs text-gray-500 leading-relaxed mb-2">
-              See your inventory at a glance with colour-coded expiry alerts —
-            </p>
-            <div className="flex gap-1.5 justify-center">
-              <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#27ae60' }} />
-              <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#e67e22' }} />
-              <span className="w-2.5 h-2.5 rounded-full" style={{ background: '#c0392b' }} />
-            </div>
-          </FeatureCard>
-
-          {/* Card 3 */}
-          <FeatureCard visible={visibleCards[2]} cardRef={(el) => { cardRefs.current[2] = el; }}>
-            <div className="w-11 h-11 rounded-xl bg-rasoi-light flex items-center justify-center mx-auto mb-3">
-              <ChefHatIcon />
-            </div>
-            <p className="font-semibold text-sm text-gray-900 mb-1">Cook smarter</p>
-            <p className="text-xs text-gray-500 leading-relaxed">
-              Get <span className="text-rasoi font-medium">AI-ranked</span> meal suggestions that use what expires soonest. Zero waste, every time.
-            </p>
-          </FeatureCard>
-
+        <p className="text-center text-xl font-semibold text-gray-800 mb-1">How RasOI works</p>
+        <p className="text-center text-xs text-gray-400 mb-8">Six steps. One decision made for you.</p>
+        <div className="flex flex-wrap items-start justify-center gap-x-2 gap-y-6 max-w-4xl mx-auto">
+          {STEPS.map((step, idx) => (
+            <React.Fragment key={step.label}>
+              <FeatureCard visible={visibleCards[idx]} cardRef={(el) => { cardRefs.current[idx] = el; }}>
+                <div className="w-11 h-11 rounded-xl bg-rasoi-light flex items-center justify-center mx-auto mb-2 text-xl">
+                  {step.emoji}
+                </div>
+                <p className="font-semibold text-sm text-gray-900 mb-0.5">{step.label}</p>
+                <p className="text-[11px] text-gray-500 leading-snug">{step.detail}</p>
+              </FeatureCard>
+              {idx < STEPS.length - 1 && (
+                <div className="hidden sm:flex items-center text-gray-300 text-lg self-center px-0.5">→</div>
+              )}
+            </React.Fragment>
+          ))}
         </div>
+      </section>
+
+      {/* ── Magic ── */}
+      <section className="bg-rasoi py-10 px-6 text-center">
+        <div className="max-w-xl mx-auto">
+          <p className="text-3xl mb-3">🥄✨</p>
+          <p className="text-white text-base sm:text-lg font-semibold leading-relaxed">
+            Chammach knows what you've cooked, what's available, what you need —
+            and just tells you what to make tonight.
+          </p>
+        </div>
+      </section>
+
+      {/* ── Close ── */}
+      <section className="py-14 px-6 text-center border-b border-gray-100">
+        <p className="text-lg sm:text-xl font-medium text-gray-400 max-w-xl mx-auto leading-snug">
+          This is not a recipe app.
+        </p>
+        <p className="text-2xl sm:text-3xl font-bold text-gray-900 max-w-xl mx-auto leading-snug mt-1">
+          This is the end of the daily kitchen dilemma.
+        </p>
       </section>
 
       {/* ── Footer ── */}
       <footer className="py-5 text-center text-[11px] text-gray-400 border-t border-gray-100">
         RasOI &nbsp;·&nbsp; Powered by Organic Intelligence &nbsp;·&nbsp; Colruyt Group India Hackathon 2025
       </footer>
+
+      {/* ── Welcome back / start fresh prompt ── */}
+      {sessionPrompt && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-card shadow-2xl p-6 w-full max-w-sm text-center animate-bounce-in">
+            <div className="text-4xl mb-3">🥄</div>
+            <h3 className="text-lg font-bold text-gray-900 mb-1">Welcome back!</h3>
+            <p className="text-sm text-gray-500 mb-5">
+              Your last scan was {daysAgo(sessionPrompt.scanDate ?? '')} with {sessionPrompt.items.length} item{sessionPrompt.items.length !== 1 ? 's' : ''}.
+            </p>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={handleResumeSession}
+                className="w-full py-2.5 bg-rasoi hover:bg-rasoi-dark text-white font-semibold text-sm rounded-pill transition-colors"
+              >
+                Continue from last scan
+              </button>
+              <button
+                onClick={handleStartFresh}
+                className="w-full py-2.5 border border-gray-200 hover:bg-gray-50 text-gray-600 font-semibold text-sm rounded-pill transition-colors"
+              >
+                Start a fresh scan
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -289,7 +356,7 @@ function FeatureCard({
   return (
     <div
       ref={cardRef}
-      className="bg-white border border-gray-100 rounded-card p-6 text-center hover:-translate-y-1 transition-all"
+      className="bg-white border border-gray-100 rounded-card p-4 w-32 sm:w-36 text-center hover:-translate-y-1 transition-all"
       style={{
         opacity: 0,
         ...(visible ? { animation: 'landingCardIn .5s ease forwards' } : {}),
@@ -349,34 +416,3 @@ function CameraIcon() {
   );
 }
 
-function ReceiptIcon() {
-  return (
-    <svg width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24">
-      <path d="M14 2H6a2 2 0 00-2 2v16l3-2 2 2 2-2 2 2 2-2 3 2V4a2 2 0 00-2-2z" />
-      <line x1="16" y1="8" x2="8" y2="8" />
-      <line x1="16" y1="12" x2="8" y2="12" />
-      <line x1="10" y1="16" x2="8" y2="16" />
-    </svg>
-  );
-}
-
-function GridIcon() {
-  return (
-    <svg width="22" height="22" fill="none" stroke="#1D9E75" strokeWidth="2" viewBox="0 0 24 24">
-      <rect x="3" y="3" width="7" height="7" />
-      <rect x="14" y="3" width="7" height="7" />
-      <rect x="14" y="14" width="7" height="7" />
-      <rect x="3" y="14" width="7" height="7" />
-    </svg>
-  );
-}
-
-function ChefHatIcon() {
-  return (
-    <svg width="22" height="22" fill="none" stroke="#1D9E75" strokeWidth="2" viewBox="0 0 24 24">
-      <path d="M6 13.87A4 4 0 017.41 6a5.11 5.11 0 0114 1.08 4 4 0 012 3.42 3.84 3.84 0 01-2.4 3.5" />
-      <rect x="6" y="17" width="12" height="4" rx="1" />
-      <line x1="6" y1="13" x2="18" y2="13" />
-    </svg>
-  );
-}

@@ -1,10 +1,11 @@
 """
 Scan router — POST /api/scan
-Accepts an image upload, calls Claude Vision, saves results to pantry.
+Accepts an image upload, calls the vision model, saves the result as the
+user's session pantry (user_last_scan) — see PRD "session-based pantry".
 
 Image storage flow (PRD §6.2):
   image → validate → upload to Supabase Storage (best-effort)
-  → record scan in pantry_scans → send bytes to Claude Vision → save ingredients
+  → send bytes to the vision model → overwrite (or append to) the last scan
 """
 
 from fastapi import APIRouter, UploadFile, File, Form, HTTPException, Depends, BackgroundTasks
@@ -12,7 +13,7 @@ from datetime import date
 from typing import Optional
 from app.clients import claude_client
 from app.clients import supabase_client
-from app.database import get_repository, PantryRepository
+from app.database import get_last_scan_repository, LastScanRepository, DEMO_USER_ID
 from app import guardrails
 
 router = APIRouter(prefix="/api/scan", tags=["scan"])
@@ -25,24 +26,23 @@ MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 async def scan_image(
     image: UploadFile = File(...),
     scanType: str = Form("ingredient"),
-    append: bool = Form(False),   # False = replace pantry, True = add to existing
-    userId: str = Form("guest"),  # Supabase Auth UID or "guest"
+    append: bool = Form(False),   # False = replace last scan, True = merge into it
+    userId: str = Form(DEMO_USER_ID),
     knownExpirationDate: Optional[str] = Form(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
-    repo: PantryRepository = Depends(get_repository),
+    repo: LastScanRepository = Depends(get_last_scan_repository),
 ):
     """
-    Scan an ingredient photo or grocery receipt.
+    Scan an ingredient photo or grocery receipt into the session pantry.
 
     - Validates file type and size
     - Checks form fields for prompt injection (PRD §14.1)
     - Uploads image to Supabase Storage (best-effort — scan continues if Supabase is not configured)
-    - Records scan in pantry_scans table
-    - Sends image to Claude Vision for ingredient extraction
-    - Validates Claude output for non-food images and injection in results (PRD §14.1)
-    - When append=False (default): clears pantry then saves extracted items
-    - When append=True: adds extracted items to existing pantry
-    - Returns the saved pantry items plus the Supabase image URL
+    - Sends image to the vision model for ingredient extraction
+    - Validates extraction output for non-food images and injection (PRD §14.1)
+    - When append=False (default): overwrites the last scan with these items
+    - When append=True: merges these items into the existing last scan
+    - Returns the session's items plus the Supabase image URL
     """
     # ── 14.1: Prompt injection check on form inputs ──────────────────────────
     try:
@@ -88,14 +88,8 @@ async def scan_image(
                 user_id=userId,
                 content_type=media_type,
             )
-            # Record in pantry_scans table
-            await repo.save_scan_record(
-                user_id=userId,
-                image_path=image_storage_path,
-                scan_type=scanType,
-            )
         except Exception as exc:
-            # Non-fatal — log and continue with Claude extraction
+            # Non-fatal — log and continue with vision extraction
             import logging
             logging.getLogger(__name__).warning(
                 "[scan] Supabase upload failed (continuing without storage): %s", exc
@@ -118,7 +112,7 @@ async def scan_image(
             "message": "No ingredients detected in the image. Try a clearer photo.",
         }
 
-    # ── 14.1: Validate scan output (non-food image + injection in Claude output)
+    # ── 14.1: Validate scan output (non-food image + injection in output)
     is_valid, reason = guardrails.validate_food_scan_result(raw_ingredients)
     if not is_valid:
         return {
@@ -127,68 +121,49 @@ async def scan_image(
             "message": reason,
         }
 
-    # Replace or append pantry depending on the 'append' flag
-    if not append:
-        await repo.delete_all()
-
-    # Save each ingredient to the pantry
+    # Normalise extracted items for the session pantry
     today = date.today().isoformat()
-    saved = []
-    for ing in raw_ingredients:
-        try:
-            item = await repo.create(
-                {
-                    "name": str(ing.get("name", "unknown")).strip().lower(),
-                    "quantity": float(ing.get("quantity", 1)),
-                    "unit": str(ing.get("unit", "pcs")),
-                    "acquisition_date": str(ing.get("acquisition_date", today)),
-                    "expiration_date": knownExpirationDate or str(ing.get("expiration_date", today)),
-                }
-            )
-            saved.append(item)
-        except Exception:
-            # Skip items that fail to save (don't abort the whole request)
-            continue
+    new_items = [
+        {
+            "name": str(ing.get("name", "unknown")).strip().lower(),
+            "quantity": float(ing.get("quantity", 1)),
+            "unit": str(ing.get("unit", "pcs")),
+            "acquisition_date": str(ing.get("acquisition_date", today)),
+            "expiration_date": knownExpirationDate or str(ing.get("expiration_date", today)),
+            "confidence": float(ing.get("confidence", 1.0)),
+        }
+        for ing in raw_ingredients
+    ]
 
-    # Attach confidence from raw extraction for the frontend
-    saved_with_meta = []
-    for item in saved:
-        match = next(
-            (i for i in raw_ingredients if i.get("name", "").lower() == item["name"]),
-            None,
-        )
-        saved_with_meta.append(
-            {**item, "confidence": match.get("confidence", 1.0) if match else 1.0}
-        )
+    if append:
+        existing = await repo.get_last_scan(userId)
+        prior_items = (existing or {}).get("items_json") or []
+        # Replace same-named items rather than duplicating them
+        prior_by_name = {i["name"]: i for i in prior_items if i.get("name")}
+        for item in new_items:
+            prior_by_name[item["name"]] = item
+        items = list(prior_by_name.values())
+    else:
+        items = new_items
+
+    saved = await repo.save_last_scan(
+        user_id=userId,
+        scan_type=scanType,
+        items=items,
+        image_path=image_storage_path or None,
+    )
 
     # Trigger Chammach agentic loop in background — PRD §8b.6 agentic moment #1
     # "Auto-recommend on scan complete — no button click needed"
     from app.routers.chammach import run_agent_loop
     background_tasks.add_task(run_agent_loop, "pantry_scan_completed")
+    # Append-only signal for future personalization (cuisine affinity, promotions)
+    background_tasks.add_task(repo.log_scan_history, userId, scanType, new_items)
 
     return {
         "success": True,
-        "ingredients": saved_with_meta,
-        "message": f"Detected {len(saved_with_meta)} ingredient(s) from your {scanType}.",
+        "ingredients": saved.get("items_json", items),
+        "message": f"Detected {len(new_items)} ingredient(s) from your {scanType}.",
         "imageUrl": image_signed_url or None,       # signed URL (1 hour) — None if Supabase not used
         "imagePath": image_storage_path or None,    # storage path for future signed URL refresh
     }
-
-
-@router.get("/history")
-async def scan_history(
-    userId: str = "guest",
-    limit: int = 10,
-    repo: PantryRepository = Depends(get_repository),
-):
-    """
-    Return the last `limit` scan records for a user with fresh signed URLs.
-    PRD §6b.1 — pantry_scans table.
-    """
-    records = await repo.get_scan_history(user_id=userId, limit=limit)
-    # Re-generate signed URLs for each record (previous ones may have expired)
-    if supabase_client.is_configured():
-        for rec in records:
-            if rec.get("image_path"):
-                rec["image_url"] = await supabase_client.get_signed_url(rec["image_path"])
-    return {"scans": records}

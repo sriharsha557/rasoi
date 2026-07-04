@@ -81,6 +81,50 @@ Example:
     return result if isinstance(result, list) else []
 
 
+RECEIPT_ITEMS_PROMPT = """Extract all line items from this grocery receipt. For each item return:
+raw_name, normalized_name, brand (if visible), quantity, unit, unit_price,
+total_price, category (Dairy/Vegetable/Spice/Grains/Oils/Lentils/Other).
+Return only valid JSON array, no markdown."""
+
+
+async def extract_receipt_items(
+    image_bytes: bytes, media_type: str = "image/jpeg"
+) -> tuple[list[dict], str]:
+    """
+    Send a grocery receipt image to the vision model and extract line items.
+
+    Returns (items, raw_text):
+        items    — list of dicts: raw_name, normalized_name, brand, quantity, unit,
+                   unit_price, total_price, category
+        raw_text — the model's raw response text, kept for receipt_scans.raw_ocr_text
+    """
+    client = get_async_client()
+    b64 = _encode_image(image_bytes)
+
+    response = await client.chat.completions.create(
+        model=get_model(),
+        max_completion_tokens=4096,
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": RECEIPT_ITEMS_PROMPT},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{media_type};base64,{b64}"},
+                    },
+                ],
+            }
+        ],
+        **completion_kwargs(),
+    )
+
+    raw_text = response.choices[0].message.content
+    result = _parse_json_response(raw_text)
+    items = result if isinstance(result, list) else []
+    return items, raw_text
+
+
 async def get_recipe_recommendations(
     pantry_items: list[dict],
     prioritize_expiring: bool = True,

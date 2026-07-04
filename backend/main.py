@@ -7,15 +7,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
-import asyncio
 import os
 import logging
 import json
 from datetime import datetime
 
 from app.database import get_database
-from app.routers import scan, pantry, recipes, substitutions, planner
-from app.routers.chammach import router as chammach_router, run_agent_loop
+from app.routers import scan, pantry, recipes, substitutions, planner, preferences, receipt, suggest, history
+from app.routers.chammach import router as chammach_router
 from app.guardrails import demo_preflight_check
 
 load_dotenv()
@@ -24,41 +23,19 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
-async def _expiry_check_loop():
-    """Every hour, check if any pantry items are expiring and trigger Chammach."""
-    while True:
-        await asyncio.sleep(3600)
-        try:
-            from app.database import get_repository
-            repo = await get_repository()
-            all_items = await repo.get_all()
-            # Check for any expiring/expired items
-            from datetime import date
-            expiring = [
-                i for i in all_items
-                if i.get("expiration_date") and
-                   (date.fromisoformat(i["expiration_date"]) - date.today()).days <= 2
-            ]
-            if expiring:
-                logger.info("[expiry_loop] %d expiring item(s) — triggering Chammach", len(expiring))
-                await run_agent_loop("expiry_threshold_crossed")
-            # PRD §8b.4 — pantry drops below 5 items triggers low_stock alert
-            elif len(all_items) < 5 and len(all_items) > 0:
-                logger.info("[expiry_loop] Pantry below 5 items (%d) — triggering low_stock", len(all_items))
-                await run_agent_loop("pantry_low_stock")
-        except Exception as exc:
-            logger.warning("[expiry_loop] Error during check: %s", exc)
-
-
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Initialise SQLite DB on startup; start hourly expiry checker."""
+    """Initialise SQLite DB on startup.
+
+    No hourly expiry checker — RasOI's pantry is session-based (last scan
+    only), so there's no persisted, continuously-tracked inventory to poll
+    for expiring/low-stock items. Chammach now fires on explicit triggers
+    (scan complete, recipe cooked, user action) instead.
+    """
     logger.info("Initialising RasOI database…")
     await get_database()
     logger.info("Database ready.")
-    expiry_task = asyncio.create_task(_expiry_check_loop())
     yield
-    expiry_task.cancel()
 
 
 app = FastAPI(
@@ -187,6 +164,10 @@ app.include_router(pantry.router)
 app.include_router(recipes.router)
 app.include_router(substitutions.router)
 app.include_router(planner.router)
+app.include_router(preferences.router)
+app.include_router(receipt.router)
+app.include_router(suggest.router)
+app.include_router(history.router)
 app.include_router(chammach_router)
 
 

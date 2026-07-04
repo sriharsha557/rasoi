@@ -1,8 +1,9 @@
 """Planner, household, grocery, and cuisine profile endpoints."""
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Query
 
-from app.database import PantryRepository, get_repository
+from app.database import DEMO_USER_ID
+from app.routers.pantry import get_session_pantry_items
 from app.services.planner_service import (
     build_weekly_plan,
     get_cuisine_profiles,
@@ -18,9 +19,8 @@ async def weekly_planner(
     region: str = Query("south_indian"),
     household_size: int = Query(2, ge=1, le=12),
     days: int = Query(7, ge=1, le=14),
-    repo: PantryRepository = Depends(get_repository),
 ):
-    pantry_items = await repo.get_all()
+    pantry_items = await get_session_pantry_items(DEMO_USER_ID)
     return build_weekly_plan(pantry_items, region, household_size, days)
 
 

@@ -1,8 +1,8 @@
 """
 Chammach Agentic Loop — WebSocket endpoint + background agent.
 
-Observes pantry state via SQLite, calls Claude with tool_use,
-and pushes ChammachEvent to all connected WebSocket clients.
+Observes the session pantry (last scan) and cook history, calls the model
+with tool_use, and pushes ChammachEvent to all connected WebSocket clients.
 
 Endpoints:
   WS   /ws/chammach           — real-time event stream to frontend
@@ -17,11 +17,12 @@ from typing import Optional
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, BackgroundTasks
 from pydantic import BaseModel
 
-from app.database import get_repository
-from app.routers.pantry import _attach_expiry_flags
+from app.database import get_cook_history_repository, DEMO_USER_ID
+from app.routers.pantry import get_session_pantry_items
 from app.services.recipe_service import get_recipes
 from app.clients import claude_client as _claude_client
-from app.clients.ai_config import get_async_client, get_model, completion_kwargs
+from app.clients import supabase_client
+from app.clients.ai_config import get_async_client, get_model
 from app import guardrails
 
 logger = logging.getLogger(__name__)
@@ -68,31 +69,27 @@ manager = _ConnectionManager()
 
 # ── Pantry helpers ─────────────────────────────────────────────────────────────
 
-async def _fetch_pantry() -> tuple[list[dict], list[dict]]:
-    """Read all pantry items from SQLite; return (all_items, expiring_items)."""
-    repo = await get_repository()
-    raw = await repo.get_all()
-    all_items = [_attach_expiry_flags(dict(row)) for row in raw]
-    expiring = [i for i in all_items if i.get("isExpiring") or i.get("isExpired")]
-    return all_items, expiring
+async def _fetch_pantry() -> list[dict]:
+    """Read the session pantry (last scan) — no live expiry tracking."""
+    return await get_session_pantry_items(DEMO_USER_ID)
 
 
 # ── Tool definitions for Claude ────────────────────────────────────────────────
 
 _TOOLS = [
     {
-        "name": "check_expiry",
+        "name": "get_session_pantry",
         "description": (
-            "Read the current pantry and return items expiring soon "
-            "(red = today or past, amber = within 2 days). Always call this first."
+            "Read the user's session pantry — the ingredients from their most recent "
+            "scan. There's no live expiry tracking; this just reflects what was last "
+            "scanned. Always call this first."
         ),
         "input_schema": {"type": "object", "properties": {}, "required": []},
     },
     {
         "name": "search_recipes",
         "description": (
-            "Fetch meal recommendations using the current pantry ingredients. "
-            "Prioritises expiring items."
+            "Fetch meal recommendations using the session pantry's ingredients."
         ),
         "input_schema": {
             "type": "object",
@@ -143,6 +140,28 @@ _TOOLS = [
         },
     },
     {
+        "name": "suggest_missing_products",
+        "description": (
+            "When a recipe has missing ingredients, suggest smart products "
+            "based on user purchase history and generate shopping cart links"
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "missing_ingredients": {
+                    "type": "array",
+                    "items": {"type": "string"},
+                    "description": "Names of ingredients missing from the pantry, e.g. ['Cream', 'Butter']",
+                },
+                "recipe_name": {
+                    "type": "string",
+                    "description": "The recipe these ingredients are needed for",
+                },
+            },
+            "required": ["missing_ingredients", "recipe_name"],
+        },
+    },
+    {
         "name": "notify_user",
         "input_schema": {
             "type": "object",
@@ -186,10 +205,19 @@ _SYSTEM_PROMPT = """
 You are Chammach, RasOI's agentic kitchen assistant — a friendly talking spoon.
 
 Your job is to proactively help the user manage their kitchen:
-- Check what is expiring and alert them before food goes to waste
-- Recommend meals that use expiring ingredients first
+- Recommend meals using what's in their session pantry (their last scan)
 - Suggest substitutes when ingredients are missing
-- Avoid suggesting the same meal two days in a row
+- When a recommended recipe has missing ingredients, call suggest_missing_products()
+  to find products from the user's usual brands and estimate the cost
+- Use cook history to make suggestions feel personal, not repetitive — this is your
+  strongest tool. Don't just avoid repeats; notice patterns and say so:
+    "You've cooked Palak Paneer 3 times this month — try Matar Paneer today,
+     you have all the ingredients!"
+    "You haven't cooked dal in 10 days. Dal Tadka takes 30 minutes and you
+     have everything."
+    "Last time you made Palak Paneer you were missing cream. This time you
+     have it — want to cook it properly?"
+  A proactive, personalised suggestion beats a generic one every time.
 - Be warm, concise, and helpful — speak like a friend, not a robot
 
 AGENTIC RULES (mandatory — PRD §14.3):
@@ -198,49 +226,52 @@ AGENTIC RULES (mandatory — PRD §14.3):
 3. TOOL BUDGET: Maximum 5 tool calls per response. Be efficient — combine insights.
 4. NO EXTERNAL ORDERS: You cannot call shopping, delivery, or payment APIs.
 5. GRACEFUL DEGRADATION: If a tool returns an error, continue with what you know.
-6. AUDIT TRAIL: Be specific — name the ingredient, name the dish, explain the expiry.
+6. AUDIT TRAIL: Be specific — name the ingredient, name the dish, name the pattern you noticed.
 7. TRANSPARENCY: Your notify_user message must explain what you found and why you recommend it.
 
 WORKFLOW:
-1. Always call check_expiry() first.
-2. If expiring items exist, call search_recipes() to find meals that use them.
-3. If the trigger is recipe_cooked or idle, call get_cook_history() to avoid repeating meals.
+1. Always call get_session_pantry() first.
+2. Call get_cook_history() to see what's been cooked recently — use it to avoid
+   repeats and to spot patterns worth mentioning (a favourite dish, a dish not
+   made in a while, a past attempt that was missing one ingredient).
+3. Call search_recipes() for meal ideas using the session pantry.
 4. If a top recipe is missing an ingredient, call get_substitution().
-5. Always end with notify_user() — this is your only way to talk to the user.
+5. If a top recipe has missing ingredients the user would need to buy, call
+   suggest_missing_products() with those ingredient names and the recipe name.
+   When you do, phrase your notify_user() dialogue like:
+   "You're missing {n} ingredients for {recipe}. Based on what you usually buy,
+   I've found them on Blinkit for ~₹{total}. Shall I open your cart?"
+   (Never actually open the cart or place an order — Rule 2/4 below. Just offer.)
+6. Always end with notify_user() — this is your only way to talk to the user.
 """
 
 
 # ── Tool executor ──────────────────────────────────────────────────────────────
 
 async def _execute_tool(tool_name: str, tool_input: dict) -> str:
-    if tool_name == "check_expiry":
-        all_items, expiring = await _fetch_pantry()
-        if not expiring:
+    if tool_name == "get_session_pantry":
+        all_items = await _fetch_pantry()
+        if not all_items:
             return json.dumps({
-                "expiring": [],
-                "all_count": len(all_items),
-                "message": "Nothing expiring soon. Pantry looks fresh.",
+                "items": [],
+                "message": "No session pantry yet — the user hasn't scanned anything.",
             })
         return json.dumps({
-            "expiring": [
-                {
-                    "name": i["name"],
-                    "status": "red" if i.get("isExpired") else "amber",
-                    "expiry": i.get("expirationDate"),
-                }
-                for i in expiring
+            "items": [
+                {"name": i["name"], "quantity": i["quantity"], "unit": i["unit"]}
+                for i in all_items
             ],
-            "all_count": len(all_items),
+            "count": len(all_items),
         })
 
     elif tool_name == "search_recipes":
         count = int(tool_input.get("count", 3))
-        all_items, _ = await _fetch_pantry()
+        all_items = await _fetch_pantry()
         if not all_items:
-            return json.dumps({"error": "Pantry is empty"})
+            return json.dumps({"error": "Session pantry is empty — nothing scanned yet"})
         result = await get_recipes(
             pantry_items=all_items,
-            prioritize_expiring=True,
+            prioritize_expiring=False,
             max_recipes=count,
         )
         recipes = result.get("recipes", [])
@@ -252,7 +283,6 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> str:
                     "name": r["name"],
                     "prepTimeMinutes": r.get("prepTimeMinutes", 30),
                     "matchPercentage": r.get("matchPercentage", 0),
-                    "usesExpiringItems": r.get("usesExpiringItems", False),
                     "missingIngredients": r.get("missingIngredients", [])[:3],
                 }
                 for r in recipes[:count]
@@ -262,7 +292,7 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> str:
     elif tool_name == "get_substitution":
         missing = tool_input.get("missing_ingredient", "")
         recipe_name = tool_input.get("recipe_name", "this recipe")
-        all_items, _ = await _fetch_pantry()
+        all_items = await _fetch_pantry()
         if not all_items:
             return json.dumps({"error": "No pantry items available for substitution"})
         try:
@@ -277,7 +307,7 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> str:
 
     elif tool_name == "get_cook_history":
         days = int(tool_input.get("days", 7))
-        repo = await get_repository()
+        repo = await get_cook_history_repository()
         history = await repo.get_cook_history(days=days)
         if not history:
             return json.dumps({
@@ -293,6 +323,36 @@ async def _execute_tool(tool_name: str, tool_input: dict) -> str:
                 }
                 for h in history
             ],
+        })
+
+    elif tool_name == "suggest_missing_products":
+        missing = tool_input.get("missing_ingredients") or []
+        recipe_name = tool_input.get("recipe_name", "this recipe")
+        if not missing:
+            return json.dumps({"error": "No missing ingredients provided"})
+
+        suggestions = []
+        total_inr = 0.0
+        for ingredient in missing[:10]:  # Rule 3-adjacent: bound fan-out per tool call
+            try:
+                result = await supabase_client.call_rpc(
+                    "suggest_product_for_missing",
+                    {"user_id": DEMO_USER_ID, "ingredient_name": ingredient},
+                )
+                if isinstance(result, list):
+                    result = result[0] if result else None
+                if result:
+                    suggestions.append({"ingredient": ingredient, **result})
+                    total_inr += float(result.get("price_inr") or 0)
+                else:
+                    suggestions.append({"ingredient": ingredient, "error": "No suggestion found"})
+            except Exception as exc:
+                suggestions.append({"ingredient": ingredient, "error": str(exc)})
+
+        return json.dumps({
+            "recipe_name": recipe_name,
+            "suggestions": suggestions,
+            "estimated_total_inr": round(total_inr, 2),
         })
 
     elif tool_name == "notify_user":
@@ -332,12 +392,13 @@ async def run_agent_loop(trigger: str = "pantry_updated") -> None:
     final_event: ChammachEvent | None = None
 
     for _ in range(5):
+        # NOTE: gpt-5.5 rejects `reasoning_effort` together with function `tools`
+        # on /chat/completions, so we omit completion_kwargs() here.
         response = await client.chat.completions.create(
             model=model,
             max_completion_tokens=4096,
             tools=_OPENAI_TOOLS,
             messages=messages,
-            **completion_kwargs(),
         )
 
         choice = response.choices[0].message

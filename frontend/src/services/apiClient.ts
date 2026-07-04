@@ -30,7 +30,15 @@ import type {
   WeeklyPlannerResponse,
   CuisineProfilesResponse,
   HouseholdProfile,
-  DeliveryPartnersResponse
+  DeliveryPartnersResponse,
+  PreferencesResponse,
+  PreferencesUpdateRequest,
+  PreferencesSaveResponse,
+  ReceiptScanResponse,
+  SuggestResponse,
+  ReceiptHistoryResponse,
+  BrandPreferencesResponse,
+  BuyingPatternsSummary
 } from '../types';
 
 /**
@@ -387,6 +395,87 @@ const apiClient = {
       params: {
         items: items.join(','),
       },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get the demo user's saved onboarding preferences.
+   *
+   * Endpoint: GET /api/preferences
+   */
+  getPreferences: async (): Promise<PreferencesResponse> => {
+    const response = await axiosInstance.get<PreferencesResponse>('/preferences');
+    return response.data;
+  },
+
+  /**
+   * Save (create or update) the demo user's onboarding preferences.
+   *
+   * Endpoint: PUT /api/preferences
+   */
+  savePreferences: async (data: PreferencesUpdateRequest): Promise<PreferencesSaveResponse> => {
+    const response = await axiosInstance.put<PreferencesSaveResponse>('/preferences', data);
+    return response.data;
+  },
+
+  /**
+   * Scan a grocery receipt image — extracts and saves line items to Supabase.
+   *
+   * Endpoint: POST /api/receipt/scan
+   */
+  scanReceipt: async (
+    imageFile: File,
+    storeName?: string,
+    scanDate?: string
+  ): Promise<ReceiptScanResponse> => {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    if (storeName) formData.append('storeName', storeName);
+    if (scanDate) formData.append('scanDate', scanDate);
+
+    const response = await axiosInstance.post<ReceiptScanResponse>('/receipt/scan', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+    return response.data;
+  },
+
+  /**
+   * Get a specific product suggestion for a missing ingredient.
+   *
+   * Endpoint: GET /api/suggest
+   */
+  getSuggestion: async (ingredient: string, userId: string): Promise<SuggestResponse> => {
+    const response = await axiosInstance.get<SuggestResponse>('/suggest', {
+      params: { ingredient, user_id: userId },
+    });
+    return response.data;
+  },
+
+  /**
+   * Purchase history — receipt timeline, brand loyalty, buying patterns.
+   *
+   * Endpoints: GET /api/history/receipts | /brand-preferences | /summary
+   */
+  getReceiptHistory: async (userId: string): Promise<ReceiptHistoryResponse> => {
+    const response = await axiosInstance.get<ReceiptHistoryResponse>('/history/receipts', {
+      params: { userId },
+    });
+    return response.data;
+  },
+
+  getBrandPreferences: async (userId: string): Promise<BrandPreferencesResponse> => {
+    const response = await axiosInstance.get<BrandPreferencesResponse>('/history/brand-preferences', {
+      params: { userId },
+    });
+    return response.data;
+  },
+
+  getBuyingSummary: async (userId: string): Promise<BuyingPatternsSummary> => {
+    const response = await axiosInstance.get<BuyingPatternsSummary>('/history/summary', {
+      params: { userId },
     });
     return response.data;
   },

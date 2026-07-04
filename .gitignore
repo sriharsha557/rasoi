@@ -29,3 +29,14 @@ yarn-error.log*
 .cache/
 temp/
 tmp/
+
+# Local databases and test caches
+*.db
+*.sqlite
+*.sqlite3
+.hypothesis/
+.pytest_cache/
+
+# Old backup snapshots (not part of the live source tree)
+backend/files/
+backend/files.zip

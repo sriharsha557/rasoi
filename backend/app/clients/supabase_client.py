@@ -5,7 +5,7 @@ PRD §6.2 — Image Storage Flow:
   User uploads image → FastAPI receives file
   → Upload to Supabase Storage bucket rasoi-scans/{user_id}/{timestamp}_{type}.jpg
   → Return storage path + signed URL
-  → Caller saves record to pantry_scans table
+  → Caller stores the path on user_last_scan (session pantry) or receipt_scans
 
 Bucket: rasoi-scans  (private, authenticated access only)
 Path:   rasoi-scans/{user_id}/{timestamp}_{type}.jpg
@@ -123,3 +123,89 @@ async def get_signed_url(storage_path: str, expires_in: int = _SIGNED_URL_EXPIRY
         return ""
     supabase_url, service_key = _get_config()
     return await _create_signed_url(supabase_url, service_key, storage_path, expires_in)
+
+
+def _rest_headers(service_key: str, prefer: str = "return=representation") -> dict:
+    return {
+        "Authorization": f"Bearer {service_key}",
+        "apikey": service_key,
+        "Content-Type": "application/json",
+        "Prefer": prefer,
+    }
+
+
+async def insert_row(table: str, payload: dict) -> dict:
+    """Insert a single row into a Supabase table via PostgREST. Returns the inserted row."""
+    supabase_url, service_key = _get_config()
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{supabase_url}/rest/v1/{table}",
+            json=payload,
+            headers=_rest_headers(service_key),
+        )
+        resp.raise_for_status()
+        rows = resp.json()
+        return rows[0] if rows else payload
+
+
+async def insert_rows(table: str, payloads: list[dict]) -> list[dict]:
+    """Insert multiple rows into a Supabase table via PostgREST. Returns the inserted rows."""
+    if not payloads:
+        return []
+    supabase_url, service_key = _get_config()
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{supabase_url}/rest/v1/{table}",
+            json=payloads,
+            headers=_rest_headers(service_key),
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def select_rows(table: str, params: dict) -> list[dict]:
+    """GET rows from a Supabase table via PostgREST. `params` are PostgREST query filters."""
+    supabase_url, service_key = _get_config()
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.get(
+            f"{supabase_url}/rest/v1/{table}",
+            params=params,
+            headers=_rest_headers(service_key),
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def call_rpc(function_name: str, params: dict) -> dict | list:
+    """Call a Supabase Postgres function via PostgREST RPC. Returns the parsed JSON result."""
+    supabase_url, service_key = _get_config()
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{supabase_url}/rest/v1/rpc/{function_name}",
+            json=params,
+            headers=_rest_headers(service_key),
+        )
+        resp.raise_for_status()
+        return resp.json()
+
+
+async def upsert_rows(table: str, payloads: list[dict], on_conflict: str) -> list[dict]:
+    """
+    Upsert rows into a Supabase table via PostgREST, merging on conflict.
+
+    `on_conflict` is a comma-separated list of columns matching a UNIQUE
+    constraint on the table (e.g. "user_id,normalized_name,preferred_brand").
+    """
+    if not payloads:
+        return []
+    supabase_url, service_key = _get_config()
+    headers = _rest_headers(service_key, prefer="resolution=merge-duplicates,return=representation")
+    async with httpx.AsyncClient(timeout=20) as client:
+        resp = await client.post(
+            f"{supabase_url}/rest/v1/{table}",
+            params={"on_conflict": on_conflict},
+            json=payloads,
+            headers=headers,
+        )
+        resp.raise_for_status()
+        return resp.json()

@@ -1,42 +1,74 @@
 """
-Pantry router — GET/POST/PUT/DELETE /api/pantry
-Full CRUD for pantry items with expiry flag computation.
+Pantry router — session-based pantry (see PRD "session-based pantry").
+
+There is no persistent, continuously-tracked inventory: the pantry is
+whatever came back from the user's most recent scan (user_last_scan in
+Supabase), shown as-is until the next scan or manual edit overwrites it.
 
 Endpoints:
-  GET    /api/pantry          — list all items
-  POST   /api/pantry          — add one item
-  PUT    /api/pantry/{id}     — update item
-  DELETE /api/pantry/{id}     — remove item
-  GET    /api/pantry/expiring — items expiring soon (amber) or expired (red)
+  GET    /api/pantry          — the last scan's items + when it happened
+  POST   /api/pantry          — add one item to the current session
+  PUT    /api/pantry/{name}   — update an item's quantity/expiry estimate
+  DELETE /api/pantry/{name}   — remove an item from the current session
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from pydantic import BaseModel
 from typing import Optional
 from datetime import date
-from app.database import get_repository, PantryRepository
+from app.database import get_last_scan_repository, LastScanRepository, DEMO_USER_ID
 
 router = APIRouter(prefix="/api/pantry", tags=["pantry"])
 
 
 def _attach_expiry_flags(item: dict) -> dict:
-    """Compute isExpiring / isExpired from expiration_date and attach to item dict."""
-    try:
-        exp = date.fromisoformat(item["expiration_date"])
-        today = date.today()
-        days_left = (exp - today).days
-        item["isExpired"] = days_left < 0
-        item["isExpiring"] = 0 <= days_left <= 2   # PRD: amber = expiring in 2 days
-    except (KeyError, ValueError):
-        item["isExpired"] = False
-        item["isExpiring"] = False
-
-    # camelCase aliases expected by the frontend TypeScript types
+    """
+    Normalise a session-pantry item to the camelCase shape the frontend and
+    recipe/substitution services expect. isExpiring/isExpired are always
+    False — RasOI stopped continuously tracking expiry (see PRD "session-based
+    pantry"): the expiration_date below is still whatever the vision model
+    estimated at scan time, just not live-monitored afterwards.
+    """
+    item = dict(item)
+    item["isExpired"] = False
+    item["isExpiring"] = False
     item["acquisitionDate"] = item.pop("acquisition_date", "")
     item["expirationDate"] = item.pop("expiration_date", "")
-    item["createdAt"] = item.pop("created_at", "")
-    item["updatedAt"] = item.pop("updated_at", "")
+    item.setdefault("id", item.get("name", ""))
     return item
+
+
+async def get_session_pantry_items(user_id: str = DEMO_USER_ID) -> list[dict]:
+    """Fetch the user's last scan and return its items, camelCased. Empty list if never scanned."""
+    repo = await get_last_scan_repository()
+    last_scan = await repo.get_last_scan(user_id)
+    raw_items = (last_scan or {}).get("items_json") or []
+    return [_attach_expiry_flags(i) for i in raw_items]
+
+
+async def remove_session_items(user_id: str, names: list[str]) -> tuple[list[dict], int]:
+    """
+    Remove items (case-insensitive name match) from the user's last scan.
+    Returns (remaining_items_camelCased, removed_count).
+    """
+    repo = await get_last_scan_repository()
+    last_scan = await repo.get_last_scan(user_id)
+    if not last_scan:
+        return [], 0
+
+    raw_items = last_scan.get("items_json") or []
+    lower_names = {n.lower() for n in names}
+    remaining = [i for i in raw_items if (i.get("name") or "").lower() not in lower_names]
+    removed = len(raw_items) - len(remaining)
+
+    if removed:
+        await repo.save_last_scan(
+            user_id=user_id,
+            scan_type=last_scan.get("scan_type", "ingredient"),
+            items=remaining,
+            image_path=last_scan.get("image_path"),
+        )
+    return [_attach_expiry_flags(i) for i in remaining], removed
 
 
 class PantryItemCreateRequest(BaseModel):
@@ -52,69 +84,89 @@ class PantryItemUpdateRequest(BaseModel):
     expirationDate: Optional[str] = None  # ISO 8601 string
 
 
-@router.get("/expiring")
-async def get_expiring(repo: PantryRepository = Depends(get_repository)):
-    """Return items that are expiring within 2 days or already expired."""
-    items = await repo.get_all()
-    flagged = [_attach_expiry_flags(i) for i in items]
-    expiring = [i for i in flagged if i.get("isExpiring") or i.get("isExpired")]
-    return {"items": expiring}
-
-
 @router.get("")
-async def get_pantry(repo: PantryRepository = Depends(get_repository)):
-    """Return all pantry items sorted by expiry date (soonest first)."""
-    items = await repo.get_all()
-    return {"items": [_attach_expiry_flags(i) for i in items]}
+async def get_pantry(userId: str = Query(DEMO_USER_ID)):
+    """Return the session pantry: last scan's items plus when it happened."""
+    repo: LastScanRepository = await get_last_scan_repository()
+    last_scan = await repo.get_last_scan(userId)
+    if not last_scan:
+        return {"items": [], "hasLastScan": False, "scanDate": None, "scanType": None}
+
+    items = [_attach_expiry_flags(i) for i in (last_scan.get("items_json") or [])]
+    return {
+        "items": items,
+        "hasLastScan": True,
+        "scanDate": last_scan.get("scan_date"),
+        "scanType": last_scan.get("scan_type"),
+    }
 
 
 @router.post("")
 async def add_pantry_item(
     body: PantryItemCreateRequest,
-    repo: PantryRepository = Depends(get_repository),
+    userId: str = Query(DEMO_USER_ID),
+    repo: LastScanRepository = Depends(get_last_scan_repository),
 ):
-    """Add a new item to the pantry."""
+    """Add one item to the current session, replacing any existing item with the same name."""
     today = date.today().isoformat()
-    item = await repo.create({
+    new_item = {
         "name": body.name.strip().lower(),
         "quantity": body.quantity,
         "unit": body.unit,
         "acquisition_date": body.acquisitionDate or today,
         "expiration_date": body.expirationDate or today,
-    })
-    return {"success": True, "item": _attach_expiry_flags(item)}
+        "confidence": 1.0,
+    }
+
+    last_scan = await repo.get_last_scan(userId)
+    existing_items = (last_scan or {}).get("items_json") or []
+    items_by_name = {i["name"]: i for i in existing_items if i.get("name")}
+    items_by_name[new_item["name"]] = new_item
+
+    await repo.save_last_scan(
+        user_id=userId,
+        scan_type=(last_scan or {}).get("scan_type", "manual"),
+        items=list(items_by_name.values()),
+        image_path=(last_scan or {}).get("image_path"),
+    )
+    return {"success": True, "item": _attach_expiry_flags(new_item)}
 
 
-@router.put("/{item_id}")
+@router.put("/{item_name}")
 async def update_pantry_item(
-    item_id: str,
+    item_name: str,
     body: PantryItemUpdateRequest,
-    repo: PantryRepository = Depends(get_repository),
+    userId: str = Query(DEMO_USER_ID),
+    repo: LastScanRepository = Depends(get_last_scan_repository),
 ):
-    """Update quantity and/or expiry date for a pantry item."""
-    updates = {}
+    """Update quantity and/or expiry estimate for a session pantry item, matched by name."""
+    last_scan = await repo.get_last_scan(userId)
+    if not last_scan:
+        raise HTTPException(status_code=404, detail=f"Pantry item '{item_name}' not found.")
+
+    items = last_scan.get("items_json") or []
+    match = next((i for i in items if (i.get("name") or "").lower() == item_name.lower()), None)
+    if match is None:
+        raise HTTPException(status_code=404, detail=f"Pantry item '{item_name}' not found.")
+
     if body.quantity is not None:
-        updates["quantity"] = body.quantity
+        match["quantity"] = body.quantity
     if body.expirationDate is not None:
-        updates["expiration_date"] = body.expirationDate
+        match["expiration_date"] = body.expirationDate
 
-    if not updates:
-        raise HTTPException(status_code=400, detail="No fields provided to update.")
+    await repo.save_last_scan(
+        user_id=userId,
+        scan_type=last_scan.get("scan_type", "ingredient"),
+        items=items,
+        image_path=last_scan.get("image_path"),
+    )
+    return {"success": True, "item": _attach_expiry_flags(match)}
 
-    updated = await repo.update(item_id, updates)
-    if updated is None:
-        raise HTTPException(status_code=404, detail=f"Pantry item '{item_id}' not found.")
 
-    return {"success": True, "item": _attach_expiry_flags(updated)}
-
-
-@router.delete("/{item_id}")
-async def delete_pantry_item(
-    item_id: str,
-    repo: PantryRepository = Depends(get_repository),
-):
-    """Remove a pantry item."""
-    deleted = await repo.delete(item_id)
-    if not deleted:
-        raise HTTPException(status_code=404, detail=f"Pantry item '{item_id}' not found.")
-    return {"success": True, "message": f"Item '{item_id}' removed from pantry."}
+@router.delete("/{item_name}")
+async def delete_pantry_item(item_name: str, userId: str = Query(DEMO_USER_ID)):
+    """Remove an item from the session pantry, matched by name."""
+    _remaining, removed = await remove_session_items(userId, [item_name])
+    if not removed:
+        raise HTTPException(status_code=404, detail=f"Pantry item '{item_name}' not found.")
+    return {"success": True, "message": f"Item '{item_name}' removed from pantry."}

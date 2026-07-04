@@ -29,6 +29,9 @@ export default function Navbar() {
           <NavLink to="/meals" current={pathname}>
             🍽 Meals
           </NavLink>
+          <NavLink to="/history" current={pathname}>
+            🧾 History
+          </NavLink>
           <Link
             to="/planner"
             className="px-4 py-1.5 bg-[#1D9E75] hover:bg-[#16795A] text-white text-sm font-semibold rounded-pill transition-colors flex items-center"
@@ -40,6 +43,13 @@ export default function Navbar() {
             className="ml-2 px-4 py-1.5 bg-[#1D9E75] hover:bg-[#16795A] text-white text-sm font-semibold rounded-pill transition-colors"
           >
             + Scan
+          </Link>
+          <Link
+            to="/onboarding"
+            title="Profile & preferences"
+            className="ml-1 w-9 h-9 flex items-center justify-center rounded-full border border-gray-200 hover:bg-gray-50 transition-colors"
+          >
+            ⚙️
           </Link>
         </div>
       </div>

@@ -47,52 +47,51 @@ COMMENT ON TABLE public.user_profiles IS
 
 
 -- ------------------------------------------------------------
--- 2b. pantry_items
---     Live ingredient inventory with expiry tracking.
---     PRD §12.2 — Pantry Intelligence Engine / §5.1 F2
+-- 2b. user_last_scan
+--     Session-based pantry: one row per user holding their most
+--     recent scan's items as JSON. Replaces persistent pantry_items
+--     + pantry_scans — expiry dates on fresh produce are unknowable
+--     and users won't manually keep a live inventory in sync, so we
+--     stopped pretending to track it in real time. Each new scan
+--     (or a manual edit) overwrites this row; the app greets the
+--     user with "resume last scan" vs "start fresh" instead.
 -- ------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS public.pantry_items (
-    id              UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id         UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-    name            TEXT        NOT NULL,
-    quantity        NUMERIC     NOT NULL DEFAULT 1 CHECK (quantity >= 0),
-    unit            TEXT        NOT NULL DEFAULT 'pcs',
-    acquisition_date DATE       NOT NULL DEFAULT CURRENT_DATE,
-    expiration_date  DATE       NOT NULL,
-    created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    updated_at      TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE IF NOT EXISTS public.user_last_scan (
+    user_id     UUID        PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+    scan_date   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    scan_type   TEXT        NOT NULL DEFAULT 'ingredient' CHECK (scan_type IN ('ingredient', 'receipt', 'fridge', 'pantry', 'manual')),
+    items_json  JSONB       NOT NULL DEFAULT '[]',   -- [{name, quantity, unit, acquisition_date, expiration_date, confidence}]
+    image_path  TEXT,                                -- storage path inside rasoi-scans bucket, if any
+    updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_pantry_items_user_expiry
-    ON public.pantry_items (user_id, expiration_date ASC);
-
-CREATE INDEX IF NOT EXISTS idx_pantry_items_name
-    ON public.pantry_items (user_id, name);
-
-COMMENT ON TABLE public.pantry_items IS
-    'Live pantry inventory — expiry flags computed at query time (PRD §5.1 F2)';
+COMMENT ON TABLE public.user_last_scan IS
+    'Session-based pantry — most recent scan only, no persistent expiry tracking';
 
 
 -- ------------------------------------------------------------
--- 2c. pantry_scans
---     Scan history — links each scan to its Supabase Storage image.
---     PRD §6b.1 / §6.2 Image Storage Flow
+-- 2b2. pantry_scan_history
+--      Append-only log of every ingredient/fridge scan's items.
+--      NOT used for "what's in stock now" (that's user_last_scan) or
+--      expiry tracking — purely a signal source for personalization:
+--      cuisine-affinity-aware recipe suggestions and promotions, the
+--      same way receipt_items already drives user_brand_preferences.
 -- ------------------------------------------------------------
 
-CREATE TABLE IF NOT EXISTS public.pantry_scans (
+CREATE TABLE IF NOT EXISTS public.pantry_scan_history (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id     UUID        REFERENCES auth.users(id) ON DELETE SET NULL,
-    image_path  TEXT        NOT NULL,               -- storage path inside rasoi-scans bucket
-    scan_type   TEXT        NOT NULL CHECK (scan_type IN ('ingredient', 'receipt', 'fridge', 'pantry')),
+    user_id     UUID        NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    scan_type   TEXT        NOT NULL DEFAULT 'ingredient',
+    items_json  JSONB       NOT NULL DEFAULT '[]',
     created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_pantry_scans_user
-    ON public.pantry_scans (user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pantry_scan_history_user_time
+    ON public.pantry_scan_history (user_id, created_at DESC);
 
-COMMENT ON TABLE public.pantry_scans IS
-    'Scan history linking each upload to Supabase Storage (PRD §6b.1, §6.2)';
+COMMENT ON TABLE public.pantry_scan_history IS
+    'Append-only ingredient-scan log for personalization (cuisine affinity, promotions) — not live pantry state';
 
 
 -- ------------------------------------------------------------
@@ -214,33 +213,17 @@ CREATE TRIGGER trg_user_profiles_updated_at
     BEFORE UPDATE ON public.user_profiles
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
--- pantry_items
-DROP TRIGGER IF EXISTS trg_pantry_items_updated_at ON public.pantry_items;
-CREATE TRIGGER trg_pantry_items_updated_at
-    BEFORE UPDATE ON public.pantry_items
+-- user_last_scan
+DROP TRIGGER IF EXISTS trg_user_last_scan_updated_at ON public.user_last_scan;
+CREATE TRIGGER trg_user_last_scan_updated_at
+    BEFORE UPDATE ON public.user_last_scan
     FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
 
 
 -- ============================================================
 -- 4. HELPER VIEWS
+-- (none currently — session pantry has no computed expiry status)
 -- ============================================================
-
--- pantry_items_with_status
--- Adds expiry_status column: 'fresh' | 'expiring' | 'expired'
--- Matches frontend color logic: Green / Amber / Red (PRD §6c.2)
-CREATE OR REPLACE VIEW public.pantry_items_with_status AS
-SELECT
-    *,
-    CASE
-        WHEN expiration_date < CURRENT_DATE               THEN 'expired'
-        WHEN expiration_date <= CURRENT_DATE + INTERVAL '2 days' THEN 'expiring'
-        ELSE 'fresh'
-    END AS expiry_status,
-    (expiration_date - CURRENT_DATE) AS days_until_expiry
-FROM public.pantry_items;
-
-COMMENT ON VIEW public.pantry_items_with_status IS
-    'Pantry items enriched with expiry_status and days_until_expiry';
 
 
 -- ============================================================
@@ -267,36 +250,32 @@ CREATE POLICY "Users can update own profile"
     WITH CHECK (auth.uid() = id);
 
 
--- pantry_items
-ALTER TABLE public.pantry_items ENABLE ROW LEVEL SECURITY;
+-- user_last_scan
+ALTER TABLE public.user_last_scan ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can read own pantry"
-    ON public.pantry_items FOR SELECT
+CREATE POLICY "Users can read own last scan"
+    ON public.user_last_scan FOR SELECT
     USING (auth.uid() = user_id);
 
-CREATE POLICY "Users can insert to own pantry"
-    ON public.pantry_items FOR INSERT
+CREATE POLICY "Users can upsert own last scan"
+    ON public.user_last_scan FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can update own pantry items"
-    ON public.pantry_items FOR UPDATE
+CREATE POLICY "Users can update own last scan"
+    ON public.user_last_scan FOR UPDATE
     USING (auth.uid() = user_id)
     WITH CHECK (auth.uid() = user_id);
 
-CREATE POLICY "Users can delete own pantry items"
-    ON public.pantry_items FOR DELETE
+
+-- pantry_scan_history
+ALTER TABLE public.pantry_scan_history ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can read own scan history"
+    ON public.pantry_scan_history FOR SELECT
     USING (auth.uid() = user_id);
 
-
--- pantry_scans
-ALTER TABLE public.pantry_scans ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Users can read own scans"
-    ON public.pantry_scans FOR SELECT
-    USING (auth.uid() = user_id);
-
-CREATE POLICY "Users can insert own scans"
-    ON public.pantry_scans FOR INSERT
+CREATE POLICY "Users can insert own scan history"
+    ON public.pantry_scan_history FOR INSERT
     WITH CHECK (auth.uid() = user_id);
 
 
@@ -422,20 +401,17 @@ CREATE POLICY "Authenticated users can delete own scans"
 --    wired up. Remove these once full Supabase Auth is live.
 -- ============================================================
 
--- Allow anon to read/write pantry_items where user_id is null
--- (backend uses service_role key, so this is mainly for local testing)
-
 -- NOTE: In production, remove these and enforce auth.uid() checks.
 -- These are placeholder permissive policies for hackathon demo only.
 
-CREATE POLICY "Anon service-role access — pantry_items"
-    ON public.pantry_items FOR ALL
+CREATE POLICY "Anon service-role access — user_last_scan"
+    ON public.user_last_scan FOR ALL
     TO service_role
     USING (true)
     WITH CHECK (true);
 
-CREATE POLICY "Anon service-role access — pantry_scans"
-    ON public.pantry_scans FOR ALL
+CREATE POLICY "Anon service-role access — pantry_scan_history"
+    ON public.pantry_scan_history FOR ALL
     TO service_role
     USING (true)
     WITH CHECK (true);

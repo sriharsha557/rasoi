@@ -9,7 +9,7 @@ Endpoints:
   POST /api/pantry/cooked           — mark recipe cooked, remove used ingredients
 """
 
-from fastapi import APIRouter, HTTPException, Query, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Query, BackgroundTasks
 from pydantic import BaseModel
 from app.services.recipe_service import (
     get_continental_recipe,
@@ -20,8 +20,8 @@ from app.services.recipe_service import (
     search_recipes,
 )
 from app.services.planner_service import get_planner_recipe_by_name
-from app.routers.pantry import _attach_expiry_flags
-from app.database import get_repository, PantryRepository
+from app.routers.pantry import get_session_pantry_items, remove_session_items
+from app.database import DEMO_USER_ID, get_cook_history_repository
 
 router = APIRouter(prefix="/api", tags=["recipes"])
 
@@ -39,23 +39,19 @@ async def recipes(
     meal_type: str = Query(None),
     diet: str = Query(None),
     max_ready_time: int = Query(None, ge=1, le=240),
-    repo: PantryRepository = Depends(get_repository),
 ):
     """
-    Get meal recommendations based on available pantry ingredients.
-    
+    Get meal recommendations based on the session pantry (last scan).
+
     Query Parameters:
-    - prioritize_expiring (bool, default: true) - Prioritize recipes using expiring items
+    - prioritize_expiring (bool, default: true) - kept for API compatibility; the
+      session pantry has no live expiry tracking, so this has no effect
     - max_recipes (int, 1-20, default: 5) - Maximum number of recipes to return
     - cuisine (str, optional) - Cuisine filter hint
-    
-    Returns success response with recipes sorted by:
-    1. usesExpiringItems (true first)
-    2. matchPercentage (highest first)
-    
-    Returns 400 if pantry is empty.
+
+    Returns success response with recipes sorted by matchPercentage (highest first).
     Validates query parameters (max_recipes 1-20).
-    
+
     Validates: Requirements 4.1, 4.2, 4.3, 9.4
     """
     # Validate max_recipes parameter
@@ -64,13 +60,9 @@ async def recipes(
             status_code=422,
             detail="max_recipes must be between 1 and 20"
         )
-    
-    # Fetch pantry items
-    raw_items = await repo.get_all()
-    
-    # Attach expiry flags to items
-    pantry = [_attach_expiry_flags(i) for i in raw_items]
-    
+
+    pantry = await get_session_pantry_items(DEMO_USER_ID)
+
     # Get recipe recommendations from Supabase for Indian/local recipes and
     # Spoonacular for continental cuisines.
     result = await get_recipes(
@@ -108,13 +100,11 @@ async def recommend(
     diet: str = Query(None),
     max_ready_time: int = Query(None, ge=1, le=240),
     count: int = Query(5, ge=1, le=10),
-    repo: PantryRepository = Depends(get_repository),
 ):
     """
     Alias of /api/recipes with expiry-first ordering and cuisine hint.
     """
-    raw_items = await repo.get_all()
-    pantry = [_attach_expiry_flags(i) for i in raw_items]
+    pantry = await get_session_pantry_items(DEMO_USER_ID)
     result = await get_recipes(pantry, prioritize_expiry, count, cuisine, meal_type, diet, max_ready_time)
     return result
 
@@ -153,16 +143,12 @@ async def search_recipe_detail(query: str = Query(..., min_length=2, max_length=
 
 
 @router.get("/recipe/{recipe_id}")
-async def get_recipe_detail(
-    recipe_id: str,
-    repo: PantryRepository = Depends(get_repository),
-):
+async def get_recipe_detail(recipe_id: str):
     """
     Fetch full recipe detail from Supabase first, then Spoonacular for
     continental recipe ids.
     """
-    raw_items = await repo.get_all()
-    pantry = [_attach_expiry_flags(i) for i in raw_items]
+    pantry = await get_session_pantry_items(DEMO_USER_ID)
     recipe = None
     try:
         recipe = await get_recipe(recipe_id, pantry)
@@ -179,23 +165,21 @@ async def get_recipe_detail(
 async def mark_cooked(
     body: CookedRequest,
     background_tasks: BackgroundTasks,
-    repo: PantryRepository = Depends(get_repository),
 ):
     """
     Called when the user finishes cooking a recipe.
-    Removes the used ingredients from the pantry, saves cook history,
+    Removes the used ingredients from the session pantry, saves cook history,
     and triggers the Chammach agentic loop (PRD §8b.4).
     """
-    removed = await repo.delete_by_names(body.items_used)
+    remaining_items, removed = await remove_session_items(DEMO_USER_ID, body.items_used)
     # Save to cook_history for Chammach memory (PRD §6b.1)
-    await repo.save_cook_history(body.recipe_title, body.items_used)
-    all_items = await repo.get_all()
-    remaining = len(all_items)
+    cook_history_repo = await get_cook_history_repository()
+    await cook_history_repo.save_cook_history(body.recipe_title, body.items_used)
     # Trigger Chammach agent loop in background (PRD §8b.4)
     from app.routers.chammach import run_agent_loop
     background_tasks.add_task(run_agent_loop, "recipe_cooked")
     return {
         "removed": removed,
-        "remaining": remaining,
-        "message": f"Removed {removed} ingredient(s). {remaining} item(s) left in pantry.",
+        "remaining": len(remaining_items),
+        "message": f"Removed {removed} ingredient(s). {len(remaining_items)} item(s) left in pantry.",
     }

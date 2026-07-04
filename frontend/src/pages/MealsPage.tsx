@@ -22,7 +22,6 @@ export default function MealsPage() {
   const navigate = useNavigate();
   const { state: pantryState } = usePantry();
   const { state: recipeState, dispatch } = useRecipe();
-  const [prioritizeExpiry, setPrioritizeExpiry] = useState(true);
   const [cuisine, setCuisine] = useState<Cuisine>('any');
   const [mealType, setMealType] = useState('any');
   const [diet, setDiet] = useState('any');
@@ -50,11 +49,7 @@ export default function MealsPage() {
         dispatch({ type: 'SET_RECIPES', payload: [] });
       })
       .finally(() => dispatch({ type: 'SET_LOADING', payload: false }));
-  }, [dispatch, prioritizeExpiry, cuisine, mealType, diet, maxReadyTime]);
-
-  const handleToggle = () => {
-    setPrioritizeExpiry((current) => !current);
-  };
+  }, [dispatch, cuisine, mealType, diet, maxReadyTime]);
 
   const handleCuisineChange = (c: Cuisine) => {
     setCuisine(c);
@@ -65,10 +60,6 @@ export default function MealsPage() {
     navigate('/recipe');
   };
 
-  const expiringCount = pantryState.pantryItems.filter(
-    (i) => i.isExpiring || i.isExpired
-  ).length;
-
   return (
     <div className="min-h-screen bg-rasoi-panel pt-20 pb-10 px-4">
       <div className="max-w-5xl mx-auto">
@@ -77,24 +68,9 @@ export default function MealsPage() {
           <div>
             <h1 className="text-3xl font-extrabold text-gray-900">What Can I Cook?</h1>
             <p className="text-sm text-gray-500 mt-0.5">
-              Based on {pantryState.pantryItems.length} items in your pantry
-              {expiringCount > 0 && (
-                <span className="ml-2 text-rasoi-amber font-semibold">
-                  · {expiringCount} expiring soon
-                </span>
-              )}
+              Based on {pantryState.pantryItems.length} items in your pantry — personalised to what you usually cook.
             </p>
           </div>
-          {/* Expiry-first toggle */}
-          <label className="flex items-center gap-2.5 cursor-pointer select-none">
-            <span className="text-sm font-semibold text-gray-700">🔥 Expiry-first</span>
-            <div
-              onClick={handleToggle}
-              className={`relative w-11 h-6 rounded-full transition-colors ${prioritizeExpiry ? 'bg-rasoi' : 'bg-gray-300'}`}
-            >
-              <div className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-all ${prioritizeExpiry ? 'left-5' : 'left-0.5'}`} />
-            </div>
-          </label>
         </div>
 
         {/* Cuisine filter chips — PRD §6c.1 */}

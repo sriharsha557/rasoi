@@ -9,12 +9,11 @@ interface Msg { text: string; emoji: string }
 const DIALOGUE: Record<string, Msg> = {
   '/':        { text: 'Hey! Scan your fridge to get started!', emoji: '👋' },
   '/scan':    { text: "Upload a photo and I'll figure out what you have!", emoji: '📸' },
-  '/meals':   { text: 'Expiring items come first — zero waste, full plates!', emoji: '🍽️' },
+  '/meals':   { text: "Based on what you have and what you usually cook — here's tonight's pick!", emoji: '🍽️' },
 };
 
 function getDialogue(
   pathname: string,
-  expiringCount: number,
   pantryCount: number,
   recipeName: string | null,
   isGuest: boolean
@@ -27,8 +26,6 @@ function getDialogue(
   if (pathname === '/scan') return DIALOGUE['/scan'];
   if (pathname === '/pantry') {
     if (pantryCount === 0) return { text: "Your pantry is empty. Let's scan something!", emoji: '🛒' };
-    if (expiringCount > 0)
-      return { text: `${expiringCount} item${expiringCount > 1 ? 's' : ''} expiring soon — let me find a recipe!`, emoji: '⚠️' };
     return { text: 'Your pantry looks great! Want to see what you can cook?', emoji: '😊' };
   }
   if (pathname === '/meals') return DIALOGUE['/meals'];
@@ -45,8 +42,7 @@ export default function Chammach() {
   const { state: recipeState } = useRecipe();
   const { isGuest, demoUser } = useGuest();
 
-  const expiringCount = pantryState.pantryItems.filter(i => i.isExpiring || i.isExpired).length;
-  const localMsg = getDialogue(pathname, expiringCount, pantryState.pantryItems.length, recipeState.currentRecipe?.name ?? null, isGuest);
+  const localMsg = getDialogue(pathname, pantryState.pantryItems.length, recipeState.currentRecipe?.name ?? null, isGuest);
   const demoMsg = pathname === '/' && demoUser
     ? { text: `Welcome back, ${demoUser.displayName}! Ready to scan?`, emoji: '👋' }
     : localMsg;

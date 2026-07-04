@@ -266,10 +266,11 @@ def filter_expired_only_recipes(recipes: list[dict], pantry: list[dict]) -> list
 
 # Tools that are allowed (read-only, safe)
 ALLOWED_AGENT_TOOLS: frozenset[str] = frozenset([
-    "check_expiry",
+    "get_session_pantry",
     "search_recipes",
     "get_substitution",
     "get_cook_history",
+    "suggest_missing_products",
     "notify_user",
 ])
 
@@ -403,11 +404,11 @@ async def demo_preflight_check() -> dict:
         except Exception as exc:
             results["ai_api"] = {"status": "fail", "detail": str(exc)[:120]}
 
-    # ── S2: Pantry data available (at least 1 item for demo) ─────────────────
+    # ── S2: Session pantry available (at least 1 item for demo) ──────────────
     try:
-        from app.database import get_repository
-        repo = await get_repository()
-        items = await repo.get_all()
+        from app.database import DEMO_USER_ID
+        from app.routers.pantry import get_session_pantry_items
+        items = await get_session_pantry_items(DEMO_USER_ID)
         count = len(items)
         results["pantry_data"] = {
             "status": "ok" if count > 0 else "warn",

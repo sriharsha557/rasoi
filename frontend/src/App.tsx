@@ -6,6 +6,8 @@ import Navbar from './components/Navbar';
 import GuestBanner from './components/GuestBanner';
 import Chammach from './components/Chammach';
 import LandingPage from './pages/LandingPage';
+import OnboardingPage from './pages/OnboardingPage';
+import PurchaseHistory from './pages/PurchaseHistory';
 import ScanPage from './pages/ScanPage';
 import PantryPage from './pages/PantryPage';
 import MealsPage from './pages/MealsPage';
@@ -22,6 +24,8 @@ function App() {
             <GuestBanner />
             <Routes>
               <Route path="/" element={<LandingPage />} />
+              <Route path="/onboarding" element={<OnboardingPage />} />
+              <Route path="/history" element={<PurchaseHistory />} />
               <Route path="/scan" element={<ScanPage />} />
               <Route path="/pantry" element={<PantryPage />} />
               <Route path="/meals" element={<MealsPage />} />
