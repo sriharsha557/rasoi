@@ -59,6 +59,7 @@ class DatabaseConnection:
                     family_size INTEGER NOT NULL DEFAULT 1,
                     budget_amount REAL,
                     budget_period TEXT NOT NULL DEFAULT 'monthly',
+                    budget_currency TEXT NOT NULL DEFAULT 'EUR',
                     health_conditions TEXT NOT NULL DEFAULT '[]',  -- JSON array, e.g. ["diabetes"]
                     health_goal TEXT NOT NULL DEFAULT 'maintenance',
                     onboarding_completed INTEGER NOT NULL DEFAULT 0,
@@ -67,7 +68,7 @@ class DatabaseConnection:
                 )
             """)
 
-            # Migration for pre-existing local DBs created before health_conditions/health_goal existed.
+            # Migration for pre-existing local DBs created before these columns existed.
             existing_columns = {
                 row[1] async for row in await db.execute("PRAGMA table_info(user_preferences)")
             }
@@ -75,6 +76,8 @@ class DatabaseConnection:
                 await db.execute("ALTER TABLE user_preferences ADD COLUMN health_conditions TEXT NOT NULL DEFAULT '[]'")
             if "health_goal" not in existing_columns:
                 await db.execute("ALTER TABLE user_preferences ADD COLUMN health_goal TEXT NOT NULL DEFAULT 'maintenance'")
+            if "budget_currency" not in existing_columns:
+                await db.execute("ALTER TABLE user_preferences ADD COLUMN budget_currency TEXT NOT NULL DEFAULT 'EUR'")
 
             await db.commit()
 
@@ -224,6 +227,7 @@ class PreferencesRepository:
             "family_size": data["family_size"],
             "budget_amount": data["budget_amount"],
             "budget_period": data["budget_period"],
+            "budget_currency": data.get("budget_currency") or "EUR",
             "health_conditions": _json.dumps(data.get("health_conditions") or []),
             "health_goal": data.get("health_goal") or "maintenance",
             "onboarding_completed": 1,
@@ -235,7 +239,7 @@ class PreferencesRepository:
                     """
                     UPDATE user_preferences
                     SET cuisines = ?, diet_type = ?, height_cm = ?, weight_kg = ?,
-                        family_size = ?, budget_amount = ?, budget_period = ?,
+                        family_size = ?, budget_amount = ?, budget_period = ?, budget_currency = ?,
                         health_conditions = ?, health_goal = ?,
                         onboarding_completed = ?, updated_at = ?
                     WHERE user_id = ?
@@ -243,7 +247,8 @@ class PreferencesRepository:
                     (
                         payload["cuisines"], payload["diet_type"], payload["height_cm"],
                         payload["weight_kg"], payload["family_size"], payload["budget_amount"],
-                        payload["budget_period"], payload["health_conditions"], payload["health_goal"],
+                        payload["budget_period"], payload["budget_currency"],
+                        payload["health_conditions"], payload["health_goal"],
                         payload["onboarding_completed"], now, user_id,
                     ),
                 )
@@ -252,14 +257,15 @@ class PreferencesRepository:
                     """
                     INSERT INTO user_preferences
                         (user_id, cuisines, diet_type, height_cm, weight_kg, family_size,
-                         budget_amount, budget_period, health_conditions, health_goal,
+                         budget_amount, budget_period, budget_currency, health_conditions, health_goal,
                          onboarding_completed, created_at, updated_at)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         user_id, payload["cuisines"], payload["diet_type"], payload["height_cm"],
                         payload["weight_kg"], payload["family_size"], payload["budget_amount"],
-                        payload["budget_period"], payload["health_conditions"], payload["health_goal"],
+                        payload["budget_period"], payload["budget_currency"],
+                        payload["health_conditions"], payload["health_goal"],
                         payload["onboarding_completed"], now, now,
                     ),
                 )

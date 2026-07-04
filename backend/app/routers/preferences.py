@@ -24,6 +24,7 @@ router = APIRouter(prefix="/api/preferences", tags=["preferences"])
 
 DietType = Literal["vegetarian", "non_vegetarian", "eggetarian", "vegan"]
 BudgetPeriod = Literal["weekly", "monthly"]
+BudgetCurrency = Literal["EUR", "INR"]
 HealthCondition = Literal["diabetes", "hypertension", "thyroid", "pcos", "kidney", "allergies"]
 HealthGoal = Literal["weight_loss", "muscle_gain", "general_fitness", "maintenance"]
 
@@ -36,6 +37,7 @@ class PreferencesUpdateRequest(BaseModel):
     familySize: int = Field(ge=1, le=20)
     budgetAmount: float = Field(ge=0)
     budgetPeriod: BudgetPeriod = "monthly"
+    budgetCurrency: BudgetCurrency = "EUR"
     healthConditions: List[HealthCondition] = Field(default_factory=list)
     healthGoal: HealthGoal = "maintenance"
 
@@ -62,6 +64,7 @@ def _to_response(row: Optional[dict]) -> dict:
             "familySize": 1,
             "budgetAmount": None,
             "budgetPeriod": "monthly",
+            "budgetCurrency": "EUR",
             "healthConditions": [],
             "healthGoal": "maintenance",
             "onboardingCompleted": False,
@@ -94,6 +97,7 @@ def _to_response(row: Optional[dict]) -> dict:
         "familySize": row.get("family_size"),
         "budgetAmount": row.get("budget_amount"),
         "budgetPeriod": row.get("budget_period"),
+        "budgetCurrency": row.get("budget_currency") or "EUR",
         "healthConditions": health_conditions,
         "healthGoal": row.get("health_goal") or "maintenance",
         "onboardingCompleted": bool(row.get("onboarding_completed")),
@@ -121,6 +125,7 @@ async def save_preferences(
         "family_size": body.familySize,
         "budget_amount": body.budgetAmount,
         "budget_period": body.budgetPeriod,
+        "budget_currency": body.budgetCurrency,
         "health_conditions": body.healthConditions,
         "health_goal": body.healthGoal,
     })

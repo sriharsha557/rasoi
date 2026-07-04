@@ -318,6 +318,7 @@ export interface DeliveryPartnersResponse {
  */
 export type DietType = 'vegetarian' | 'non_vegetarian' | 'eggetarian' | 'vegan';
 export type BudgetPeriod = 'weekly' | 'monthly';
+export type BudgetCurrency = 'EUR' | 'INR';
 export type BmiCategory = 'underweight' | 'normal' | 'overweight' | 'obese';
 export type HealthCondition = 'diabetes' | 'hypertension' | 'thyroid' | 'pcos' | 'kidney' | 'allergies';
 export type HealthGoal = 'weight_loss' | 'muscle_gain' | 'general_fitness' | 'maintenance';
@@ -332,6 +333,7 @@ export interface UserPreferences {
   familySize: number;
   budgetAmount: number | null;
   budgetPeriod: BudgetPeriod;
+  budgetCurrency: BudgetCurrency;
   healthConditions: HealthCondition[];
   healthGoal: HealthGoal;
   onboardingCompleted: boolean;
@@ -349,6 +351,7 @@ export interface PreferencesUpdateRequest {
   familySize: number;
   budgetAmount: number;
   budgetPeriod: BudgetPeriod;
+  budgetCurrency: BudgetCurrency;
   healthConditions: HealthCondition[];
   healthGoal: HealthGoal;
 }

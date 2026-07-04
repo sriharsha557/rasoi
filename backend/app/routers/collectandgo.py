@@ -39,6 +39,7 @@ async def suggest(
             "onboardingCompleted": bool(prefs_row.get("onboarding_completed")),
             "budgetAmount": prefs_row.get("budget_amount"),
             "budgetPeriod": prefs_row.get("budget_period"),
+            "budgetCurrency": prefs_row.get("budget_currency") or "EUR",
             "familySize": prefs_row.get("family_size"),
         }
 

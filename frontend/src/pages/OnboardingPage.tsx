@@ -1,7 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../services/apiClient';
-import type { BmiCategory, BudgetPeriod, DietType, HealthCondition, HealthGoal } from '../types';
+import type { BmiCategory, BudgetCurrency, BudgetPeriod, DietType, HealthCondition, HealthGoal } from '../types';
+
+const CURRENCY_OPTIONS: { value: BudgetCurrency; symbol: string; label: string }[] = [
+  { value: 'EUR', symbol: '€', label: 'EUR' },
+  { value: 'INR', symbol: '₹', label: 'INR' },
+];
 
 const HEALTH_CONDITION_OPTIONS: { value: HealthCondition; label: string }[] = [
   { value: 'diabetes', label: 'Diabetes' },
@@ -66,6 +71,7 @@ export default function OnboardingPage() {
   const [familySize, setFamilySize] = useState(2);
   const [budgetAmount, setBudgetAmount] = useState('');
   const [budgetPeriod, setBudgetPeriod] = useState<BudgetPeriod>('monthly');
+  const [budgetCurrency, setBudgetCurrency] = useState<BudgetCurrency>('EUR');
   const [healthConditions, setHealthConditions] = useState<HealthCondition[]>([]);
   const [healthGoal, setHealthGoal] = useState<HealthGoal>('maintenance');
 
@@ -86,6 +92,7 @@ export default function OnboardingPage() {
         setFamilySize(preferences.familySize || 2);
         setBudgetAmount(preferences.budgetAmount != null ? String(preferences.budgetAmount) : '');
         setBudgetPeriod(preferences.budgetPeriod);
+        setBudgetCurrency(preferences.budgetCurrency || 'EUR');
         setHealthConditions(preferences.healthConditions || []);
         setHealthGoal(preferences.healthGoal || 'maintenance');
       })
@@ -131,6 +138,7 @@ export default function OnboardingPage() {
         familySize,
         budgetAmount: Number(budgetAmount),
         budgetPeriod,
+        budgetCurrency,
         healthConditions,
         healthGoal,
       });
@@ -287,15 +295,26 @@ export default function OnboardingPage() {
           <h2 className="text-sm font-bold text-gray-900 mb-3">Pantry budget</h2>
           <div className="flex gap-3">
             <label className="flex-1 text-sm font-medium text-gray-700">
-              Amount (€)
-              <input
-                type="number"
-                min="0"
-                value={budgetAmount}
-                onChange={(e) => setBudgetAmount(e.target.value)}
-                placeholder="150"
-                className="mt-1 w-full rounded-lg border border-gray-200 px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-rasoi/40"
-              />
+              Amount ({CURRENCY_OPTIONS.find((c) => c.value === budgetCurrency)?.symbol})
+              <div className="mt-1 flex rounded-lg border border-gray-200 overflow-hidden focus-within:ring-2 focus-within:ring-rasoi/40">
+                <select
+                  value={budgetCurrency}
+                  onChange={(e) => setBudgetCurrency(e.target.value as BudgetCurrency)}
+                  className="bg-gray-50 border-r border-gray-200 px-2 text-sm font-semibold text-gray-700 focus:outline-none"
+                >
+                  {CURRENCY_OPTIONS.map((c) => (
+                    <option key={c.value} value={c.value}>{c.symbol} {c.label}</option>
+                  ))}
+                </select>
+                <input
+                  type="number"
+                  min="0"
+                  value={budgetAmount}
+                  onChange={(e) => setBudgetAmount(e.target.value)}
+                  placeholder={budgetCurrency === 'EUR' ? '150' : '12000'}
+                  className="flex-1 w-full px-3 py-2 text-sm text-gray-900 focus:outline-none"
+                />
+              </div>
             </label>
             <div className="flex-1">
               <span className="text-sm font-medium text-gray-700">Period</span>
