@@ -213,7 +213,7 @@ export default function LandingPage() {
           You have food. You have no plan. You waste both.
         </p>
         <p className="anim-d relative z-10 text-base text-gray-800 font-semibold max-w-sm leading-relaxed mb-6">
-          Show us your pantry. We decide for you.
+          Show us your pantry. We'll tell you what to cook.
         </p>
 
         {/* CTA */}
